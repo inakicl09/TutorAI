@@ -1,0 +1,12 @@
+"""Shared settings for TutorAI: model names, Ollama URL, and file paths."""
+
+OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
+CHAT_MODEL_NAME = "mistral"
+EMBEDDING_MODEL_NAME = "nomic-embed-text"
+
+DOCUMENTS_DIR = "data/documents"
+CHROMA_DIR = "data/chroma_db"
+
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
+NUM_CHUNKS_TO_RETRIEVE = 4
