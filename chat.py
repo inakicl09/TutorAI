@@ -10,7 +10,28 @@ import prompts
 import rag
 
 
-def ask_tutor(conversation_history: list[dict], student_message: str) -> str:
+def get_available_models() -> list[str]:
+    """Ask Ollama which chat models are installed locally.
+
+    The embedding model is left out since it can't hold a conversation.
+    Raises urllib.error.URLError if Ollama isn't running.
+    """
+    with urllib.request.urlopen(config.OLLAMA_TAGS_URL) as response:
+        response_body = json.loads(response.read())
+
+    all_model_names = [model["name"] for model in response_body["models"]]
+    return [
+        model_name
+        for model_name in all_model_names
+        if not model_name.startswith(config.EMBEDDING_MODEL_NAME)
+    ]
+
+
+def ask_tutor(
+    conversation_history: list[dict],
+    student_message: str,
+    model_name: str = config.CHAT_MODEL_NAME,
+) -> str:
     """Send the student's message to the tutor model, using relevant course
     material as extra context, and return the tutor's reply.
 
@@ -30,7 +51,7 @@ def ask_tutor(conversation_history: list[dict], student_message: str) -> str:
         }
 
     request_body = {
-        "model": config.CHAT_MODEL_NAME,
+        "model": model_name,
         "messages": messages_for_model,
         "stream": False,
     }

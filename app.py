@@ -5,6 +5,7 @@ Run this in iTerm with: streamlit run app.py
 """
 
 import os
+import urllib.error
 
 import streamlit as st
 
@@ -22,6 +23,26 @@ if "conversation_history" not in st.session_state:
     ]
 
 with st.sidebar:
+    st.header("Conexión con Ollama")
+
+    try:
+        available_models = chat.get_available_models()
+    except urllib.error.URLError:
+        st.error(
+            "No se pudo conectar con Ollama. Ejecuta 'ollama serve' en una "
+            "terminal y vuelve a cargar esta página."
+        )
+        st.stop()
+
+    default_index = (
+        available_models.index(config.CHAT_MODEL_NAME)
+        if config.CHAT_MODEL_NAME in available_models
+        else 0
+    )
+    selected_model = st.selectbox(
+        "Elige el modelo de chat", available_models, index=default_index
+    )
+
     st.header("Material de la asignatura")
     uploaded_pdf = st.file_uploader("Sube un PDF", type="pdf")
 
@@ -49,10 +70,14 @@ if student_message:
     with st.chat_message("user"):
         st.write(student_message)
 
-    with st.spinner("Pensando..."):
-        tutor_reply = chat.ask_tutor(
-            st.session_state.conversation_history, student_message
-        )
+    try:
+        with st.spinner("Pensando..."):
+            tutor_reply = chat.ask_tutor(
+                st.session_state.conversation_history, student_message, selected_model
+            )
+    except urllib.error.URLError:
+        st.error("Se perdió la conexión con Ollama. Comprueba que sigue en marcha.")
+        st.stop()
 
     with st.chat_message("assistant"):
         st.write(tutor_reply)
