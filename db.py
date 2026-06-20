@@ -60,6 +60,7 @@ def init_db() -> None:
                 position INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                created_at TEXT,
                 PRIMARY KEY (chat_id, position)
             );
 
@@ -74,6 +75,15 @@ def init_db() -> None:
             );
             """
         )
+
+        # Migration: older databases were created before chat_messages had
+        # a created_at column.
+        existing_columns = [
+            row["name"] for row in connection.execute("PRAGMA table_info(chat_messages)")
+        ]
+        if "created_at" not in existing_columns:
+            connection.execute("ALTER TABLE chat_messages ADD COLUMN created_at TEXT")
+
         connection.commit()
     finally:
         connection.close()

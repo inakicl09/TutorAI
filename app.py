@@ -95,7 +95,7 @@ with st.sidebar:
         st.session_state.chats_loaded = False
         st.rerun()
 
-st.title(text["app_title"])
+st.title(config.ASSISTANT_NAMES[role])
 
 if role == "admin":
     st.subheader(text["admin_dashboard_header"])
@@ -138,13 +138,32 @@ elif role == "teacher":
                 for link in student_record["subject_links"]
                 if link["teacher"] == st.session_state.username
             ]
-            with st.expander(student_username):
-                student_chats = chat_storage.load_chats(student_username)
+            student_chats = chat_storage.load_chats(student_username)
+            relevant_chats = [
+                c
+                for c in student_chats
+                if any(
+                    c["grade"] == link["grade"] and c["subject"] == link["subject"]
+                    for link in relevant_links
+                )
+            ]
+            non_system_messages = [
+                m for c in relevant_chats for m in c["history"] if m["role"] != "system"
+            ]
+            message_count = len(non_system_messages)
+            timestamps = [m["created_at"] for m in non_system_messages if m.get("created_at")]
+            last_active = max(timestamps) if timestamps else text["no_activity_yet"]
+
+            expander_label = (
+                f"{student_username} — {text['messages_count_label']}: {message_count} · "
+                f"{text['last_active_label']}: {last_active}"
+            )
+            with st.expander(expander_label):
                 for link in relevant_links:
                     st.write(f"**{link['subject']} ({link['grade']})**")
                     matching_chats = [
                         c
-                        for c in student_chats
+                        for c in relevant_chats
                         if c["grade"] == link["grade"] and c["subject"] == link["subject"]
                     ]
                     if not matching_chats:
@@ -156,6 +175,8 @@ elif role == "teacher":
                                 continue
                             with st.chat_message(message["role"]):
                                 st.write(message["content"])
+                                if message.get("created_at"):
+                                    st.caption(message["created_at"])
 
     st.header(text["tests_header"])
     st.info(text["tests_coming_soon"])

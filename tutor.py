@@ -202,6 +202,8 @@ def main() -> None:
     username = login_or_signup(text)
     role = users.get_user(username)["role"]
 
+    print(f"\n=== {config.ASSISTANT_NAMES[role]} ===")
+
     if role != "student":
         print(f"\n{text['cli_teacher_cli_message']}")
         return

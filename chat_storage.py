@@ -2,12 +2,22 @@
 per chat, one row per message, so chats survive restarting the app.
 """
 
+from datetime import datetime, timezone
+from typing import Optional
+
 import db
 
 
-def create_chat(username: str, grade: str, subject: str, system_prompt: str) -> dict:
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def create_chat(
+    username: str, grade: str, subject: str, system_prompt: str, created_at: Optional[str] = None
+) -> dict:
     """Start a new chat for this student and return it, system message
     included."""
+    created_at = created_at or _now()
     connection = db.get_connection()
     try:
         cursor = connection.execute(
@@ -16,23 +26,24 @@ def create_chat(username: str, grade: str, subject: str, system_prompt: str) -> 
         )
         chat_id = cursor.lastrowid
         connection.execute(
-            "INSERT INTO chat_messages (chat_id, position, role, content) "
-            "VALUES (?, 0, 'system', ?)",
-            (chat_id, system_prompt),
+            "INSERT INTO chat_messages (chat_id, position, role, content, created_at) "
+            "VALUES (?, 0, 'system', ?, ?)",
+            (chat_id, system_prompt, created_at),
         )
         connection.commit()
         return {
             "id": chat_id,
             "grade": grade,
             "subject": subject,
-            "history": [{"role": "system", "content": system_prompt}],
+            "history": [{"role": "system", "content": system_prompt, "created_at": created_at}],
         }
     finally:
         connection.close()
 
 
-def add_message(chat_id: int, role: str, content: str) -> None:
+def add_message(chat_id: int, role: str, content: str, created_at: Optional[str] = None) -> None:
     """Append one message to an existing chat."""
+    created_at = created_at or _now()
     connection = db.get_connection()
     try:
         next_position = connection.execute(
@@ -40,9 +51,9 @@ def add_message(chat_id: int, role: str, content: str) -> None:
             (chat_id,),
         ).fetchone()[0]
         connection.execute(
-            "INSERT INTO chat_messages (chat_id, position, role, content) "
-            "VALUES (?, ?, ?, ?)",
-            (chat_id, next_position, role, content),
+            "INSERT INTO chat_messages (chat_id, position, role, content, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (chat_id, next_position, role, content, created_at),
         )
         connection.commit()
     finally:
@@ -62,7 +73,7 @@ def load_chats(username: str) -> list[dict]:
         chats = []
         for chat_row in chat_rows:
             message_rows = connection.execute(
-                "SELECT role, content FROM chat_messages "
+                "SELECT role, content, created_at FROM chat_messages "
                 "WHERE chat_id = ? ORDER BY position",
                 (chat_row["id"],),
             ).fetchall()

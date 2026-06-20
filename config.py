@@ -12,3 +12,11 @@ DB_PATH = "data/tutorai.db"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 NUM_CHUNKS_TO_RETRIEVE = 4
+
+# Display name shown to each role once logged in. Teachers and admin
+# don't have their own LLM/RAG assistant yet -- these are just labels.
+ASSISTANT_NAMES = {
+    "student": "Socrates",
+    "teacher": "Logos",
+    "admin": "Artemis",
+}
