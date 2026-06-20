@@ -2,7 +2,10 @@
 Run this in iTerm with: python3 tutor.py
 
 This is the original command-line prototype, kept for quick testing
-without Streamlit. See app.py for the full RAG-enabled version.
+without Streamlit. The rich teacher/admin dashboards (search by
+subject+grade, viewing student chats, etc.) only exist in app.py — here,
+students can still link to a teacher with a join code and chat, but
+teacher/admin accounts are told to use the web app instead.
 """
 
 import json
@@ -11,6 +14,7 @@ import urllib.request
 
 import chat_storage
 import config
+import db
 import prompts
 import subjects
 import translations
@@ -62,7 +66,7 @@ def choose_language() -> str:
 
 
 def login_or_signup(text: dict) -> str:
-    """Ask the student to log in or create an account. Returns the
+    """Ask the user to log in or create an account. Returns the
     logged-in username."""
     print(text["cli_login_or_signup"])
     while True:
@@ -71,20 +75,36 @@ def login_or_signup(text: dict) -> str:
             break
         print(text["cli_invalid_number"])
 
-    while True:
-        username = input(text["cli_username_prompt"]).strip()
-        password = input(text["cli_password_prompt"]).strip()
-
-        if choice == "1":
+    if choice == "1":
+        while True:
+            username = input(text["cli_username_prompt"]).strip()
+            password = input(text["cli_password_prompt"]).strip()
             if users.verify_login(username, password):
                 return username
             print(text["cli_login_failed"])
-        else:
-            if users.username_exists(username):
-                print(text["cli_signup_username_taken"])
-                continue
-            users.create_user(username, password)
-            return username
+
+    print(text["cli_role_prompt"])
+    while True:
+        role_choice = input("> ").strip()
+        if role_choice in ("1", "2"):
+            break
+        print(text["cli_invalid_number"])
+
+    while True:
+        username = input(text["cli_username_prompt"]).strip()
+        password = input(text["cli_password_prompt"]).strip()
+        if not users.username_exists(username):
+            break
+        print(text["cli_signup_username_taken"])
+
+    if role_choice == "1":
+        grade = choose_grade(text)
+        users.create_student(username, password, grade)
+    else:
+        join_code = users.create_teacher(username, password)
+        print(f"{text['join_code_label']}: {join_code}")
+
+    return username
 
 
 def choose_grade(text: dict) -> str:
@@ -95,14 +115,51 @@ def choose_grade(text: dict) -> str:
     return subjects.GRADES[chosen_index]
 
 
-def choose_subject(text: dict, grade: str) -> str:
-    """Ask the student which subject to study, from the ones offered at
-    their grade."""
-    grade_subjects = subjects.GRADE_SUBJECTS[grade]
+def link_teacher_by_code(text: dict, username: str) -> None:
+    """Ask the student for a teacher's join code and link them to one of
+    that teacher's grade+subject combos."""
+    while True:
+        join_code = input(text["cli_join_code_prompt"]).strip().upper()
+        teacher_username = users.find_teacher_by_join_code(join_code)
+        if teacher_username is None:
+            print(text["cli_join_code_invalid"])
+            continue
+
+        teacher_record = users.get_user(teacher_username)
+        if not teacher_record["teaching"]:
+            print(text["cli_no_teaching_for_link"])
+            continue
+
+        teaching_labels = [
+            f"{a['subject']} ({a['grade']})" for a in teacher_record["teaching"]
+        ]
+        chosen_index = choose_from_list(
+            text["cli_choose_subject"], teaching_labels, text["cli_invalid_number"]
+        )
+        assignment = teacher_record["teaching"][chosen_index]
+        users.link_student_to_teacher(
+            username, teacher_username, assignment["grade"], assignment["subject"]
+        )
+        print(text["link_success"])
+        return
+
+
+def choose_subject_link(text: dict, username: str) -> dict:
+    """Ask the student which of their linked grade+subject combos to chat
+    about, linking a teacher first if they have none yet."""
+    while True:
+        subject_links = users.get_user(username)["subject_links"]
+        if subject_links:
+            break
+        print(text["no_links_message"])
+        link_teacher_by_code(text, username)
+
+    link_labels = [f"{link['subject']} ({link['grade']})" for link in subject_links]
+    unique_labels = list(dict.fromkeys(link_labels))
     chosen_index = choose_from_list(
-        text["cli_choose_subject"], grade_subjects, text["cli_invalid_number"]
+        text["cli_choose_subject"], unique_labels, text["cli_invalid_number"]
     )
-    return grade_subjects[chosen_index]
+    return subject_links[link_labels.index(unique_labels[chosen_index])]
 
 
 def choose_model(available_models: list[str], text: dict) -> str:
@@ -135,13 +192,19 @@ def ask_ollama(conversation_history: list[dict], model_name: str) -> str:
 
 
 def main() -> None:
+    db.init_db()
+
     language = choose_language()
     text = translations.TEXT[language]
 
     print(f"\n{text['cli_title']}")
 
     username = login_or_signup(text)
-    existing_chats = chat_storage.load_chats(username)
+    role = users.get_user(username)["role"]
+
+    if role != "student":
+        print(f"\n{text['cli_teacher_cli_message']}")
+        return
 
     try:
         available_models = get_available_models()
@@ -149,23 +212,17 @@ def main() -> None:
         print(text["cli_ollama_unreachable"])
         return
 
-    grade = choose_grade(text)
-    subject = choose_subject(text, grade)
+    chosen_link = choose_subject_link(text, username)
     selected_model = choose_model(available_models, text)
 
     print(f"\n{text['cli_instructions']}")
 
-    new_chat = {
-        "id": max((c["id"] for c in existing_chats), default=0) + 1,
-        "grade": grade,
-        "subject": subject,
-        "history": [
-            {
-                "role": "system",
-                "content": prompts.build_system_prompt(grade, subject, language),
-            }
-        ],
-    }
+    system_prompt = prompts.build_system_prompt(
+        chosen_link["grade"], chosen_link["subject"], language
+    )
+    new_chat = chat_storage.create_chat(
+        username, chosen_link["grade"], chosen_link["subject"], system_prompt
+    )
     conversation_history = new_chat["history"]
 
     while True:
@@ -190,7 +247,8 @@ def main() -> None:
 
         print(f"\n{text['cli_tutor_label']} {tutor_reply}\n")
 
-        chat_storage.save_chats(username, existing_chats + [new_chat])
+        chat_storage.add_message(new_chat["id"], "user", student_message)
+        chat_storage.add_message(new_chat["id"], "assistant", tutor_reply)
 
 
 if __name__ == "__main__":

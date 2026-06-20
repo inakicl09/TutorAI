@@ -210,6 +210,5 @@ __marimo__/
 data/chroma_db/*
 !data/chroma_db/.gitkeep
 
-# TutorAI: user accounts (password hashes) and saved per-user chats
-data/users.json
-data/chats/
+# TutorAI: SQLite database (user accounts with password hashes, chats)
+data/tutorai.db
