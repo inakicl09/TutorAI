@@ -1,0 +1,76 @@
+"""UI text in Spanish and English, so students can pick the interface
+language. Used by both app.py and tutor.py.
+"""
+
+TEXT = {
+    "es": {
+        "app_title": "TutorAI: tu tutor socrático",
+        "language_label": "Idioma",
+        "grade_label": "Curso",
+        "subject_label": "Asignatura",
+        "new_chat_header": "Nuevo chat",
+        "create_chat_button": "Crear chat",
+        "chats_header": "Tus chats",
+        "no_chats_message": "Crea un chat para empezar.",
+        "connection_header": "Conexión con Ollama",
+        "model_label": "Elige el modelo de chat",
+        "material_header": "Material de la asignatura",
+        "upload_label": "Sube un PDF",
+        "upload_button": "Añadir material",
+        "upload_spinner": "Procesando PDF...",
+        "upload_success": "Se añadieron {num_chunks} fragmentos a la base de conocimiento.",
+        "chat_placeholder": "Escribe tu pregunta...",
+        "thinking_spinner": "Pensando...",
+        "ollama_unreachable": (
+            "No se pudo conectar con Ollama. Ejecuta 'ollama serve' y "
+            "vuelve a cargar esta página."
+        ),
+        "ollama_disconnected": "Se perdió la conexión con Ollama. Comprueba que sigue en marcha.",
+        "cli_title": "=== TutorAI: Tutor Socrático ===",
+        "cli_choose_subject": "Elige una asignatura:",
+        "cli_choose_model": "Modelos disponibles:",
+        "cli_choose_model_prompt": "Elige un modelo (numero): ",
+        "cli_invalid_number": "Numero no válido, intentalo de nuevo.",
+        "cli_instructions": "Escribe una pregunta sobre cualquier asignatura.\nEscribe 'salir' para terminar.\n",
+        "cli_you_label": "Tú: ",
+        "cli_tutor_label": "Tutor:",
+        "cli_goodbye": "Tutor: ¡Hasta luego! Sigue cuestionando todo.",
+        "cli_ollama_unreachable": (
+            "No se pudo conectar con Ollama. Ejecuta 'ollama serve' y "
+            "vuelve a intentarlo."
+        ),
+        "cli_ollama_disconnected": "Tutor: No puedo conectar con Ollama. ¿Está en marcha? Prueba 'ollama serve'.",
+    },
+    "en": {
+        "app_title": "TutorAI: your Socratic tutor",
+        "language_label": "Language",
+        "grade_label": "Grade",
+        "subject_label": "Subject",
+        "new_chat_header": "New chat",
+        "create_chat_button": "Create chat",
+        "chats_header": "Your chats",
+        "no_chats_message": "Create a chat to get started.",
+        "connection_header": "Ollama connection",
+        "model_label": "Choose the chat model",
+        "material_header": "Course material",
+        "upload_label": "Upload a PDF",
+        "upload_button": "Add material",
+        "upload_spinner": "Processing PDF...",
+        "upload_success": "Added {num_chunks} chunks to the knowledge base.",
+        "chat_placeholder": "Type your question...",
+        "thinking_spinner": "Thinking...",
+        "ollama_unreachable": "Could not connect to Ollama. Run 'ollama serve' and reload this page.",
+        "ollama_disconnected": "Lost connection to Ollama. Check that it's still running.",
+        "cli_title": "=== TutorAI: Socratic Tutor ===",
+        "cli_choose_subject": "Choose a subject:",
+        "cli_choose_model": "Available models:",
+        "cli_choose_model_prompt": "Choose a model (number): ",
+        "cli_invalid_number": "Invalid number, try again.",
+        "cli_instructions": "Type a question about any subject.\nType 'quit' to exit.\n",
+        "cli_you_label": "You: ",
+        "cli_tutor_label": "Tutor:",
+        "cli_goodbye": "Tutor: Goodbye! Keep questioning everything.",
+        "cli_ollama_unreachable": "Could not connect to Ollama. Run 'ollama serve' and try again.",
+        "cli_ollama_disconnected": "Tutor: I can't reach Ollama. Is it running? Try 'ollama serve'.",
+    },
+}
