@@ -77,7 +77,15 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     `(grade, subject)` teaching assignments, and a read-only view of
     every linked student's chats for subjects/grades they teach. Has a
     "Tests" section that's just a "coming soon" placeholder.
-  - **admin**: lists every user and their role. Nothing more yet.
+  - **admin**: can add a student or teacher account, list every user,
+    change anyone's password (the password-recovery mechanism, since
+    there's no self-service flow), regenerate a teacher's join code, and
+    delete a user (with a confirm/cancel step first). Deleting a user
+    cascades: their chats+messages, teaching assignments, and
+    subject_links in either direction all get cleaned up
+    (`users.delete_user`). Can't delete your own logged-in account.
+    Admin accounts themselves still can't be created from the UI — only
+    via `create_admin.py`, per the "limited to myself" requirement.
 - `run.sh` — creates `.venv` and installs `requirements.txt` on first run,
   then launches `python -m streamlit run tutorai/app.py --server.headless
   true`. Using `python -m streamlit` (not the bare `streamlit` command)
@@ -155,10 +163,13 @@ during the SQLite migration since no real user data existed yet.
   when this gets built.
 - Per-chat model selection (currently one global model for all chats).
 - Deleting/renaming chats, unlinking a student from a teacher.
-- Any password reset/recovery flow (none exists — if a student forgets
-  their password, there's currently no way to recover the account).
-- Admin dashboard is read-only (just lists users) — no user management
-  actions (delete, edit, promote) yet.
-- `tutor.py` (CLI) has no path for a teacher to add teaching assignments
-  or browse-search for students; only join-code linking works there, and
-  only for students. Use the web app for the teacher/admin features.
+- Self-service password reset still doesn't exist, but admin can now
+  reset any user's password from the dashboard as a workaround.
+- Admin can't change a user's role (e.g. promote student to teacher) or
+  create another admin from the UI — delete+recreate is the only path,
+  and admin creation stays exclusively in `create_admin.py`.
+- `tutor.py` (CLI) has no path for a teacher to add teaching assignments,
+  browse-search for students, or any of the new admin actions (add/
+  delete user, change password, regenerate join code) — only student
+  login + join-code linking works there. Use the web app for everything
+  else.

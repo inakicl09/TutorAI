@@ -237,6 +237,23 @@ def link_student_to_teacher(
         connection.close()
 
 
+def unlink_student_from_teacher(
+    student_username: str, teacher_username: str, grade: str, subject: str
+) -> None:
+    """Remove a student's access to a grade+subject through a specific
+    teacher. Used by the admin dashboard."""
+    connection = db.get_connection()
+    try:
+        connection.execute(
+            "DELETE FROM subject_links WHERE student_username = ? "
+            "AND teacher_username = ? AND grade = ? AND subject = ?",
+            (student_username, teacher_username, grade, subject),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def students_linked_to_teacher(teacher_username: str) -> list[str]:
     """List student usernames linked to this teacher for any subject."""
     connection = db.get_connection()
@@ -251,12 +268,101 @@ def students_linked_to_teacher(teacher_username: str) -> list[str]:
         connection.close()
 
 
-def list_all_users() -> list[dict]:
-    """Return every user's basic info (no password data), for the admin
+def list_all_users(search_text: str = "") -> list[dict]:
+    """Return every user's basic info (no password data) in alphabetical
+    order, optionally filtered by a search term. For the admin
     dashboard."""
     connection = db.get_connection()
     try:
-        rows = connection.execute("SELECT username, role, grade, join_code FROM users")
+        rows = connection.execute(
+            "SELECT username, role, grade, join_code FROM users WHERE username LIKE ? "
+            "ORDER BY username COLLATE NOCASE",
+            (f"%{search_text}%",),
+        )
         return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def set_password(username: str, new_password: str) -> None:
+    """Reset a user's password. Raises ValueError if the username is
+    unknown. Used by the admin dashboard, since there's no self-service
+    password recovery yet."""
+    connection = db.get_connection()
+    try:
+        if connection.execute(
+            "SELECT 1 FROM users WHERE username = ?", (username,)
+        ).fetchone() is None:
+            raise ValueError("Username does not exist")
+
+        salt = secrets.token_hex(16)
+        connection.execute(
+            "UPDATE users SET salt = ?, password_hash = ? WHERE username = ?",
+            (salt, _hash_password(new_password, salt), username),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def regenerate_join_code(teacher_username: str) -> str:
+    """Replace a teacher's join code with a new one and return it.
+    Raises ValueError if the username isn't a teacher."""
+    connection = db.get_connection()
+    try:
+        row = connection.execute(
+            "SELECT role FROM users WHERE username = ?", (teacher_username,)
+        ).fetchone()
+        if row is None or row["role"] != "teacher":
+            raise ValueError("Not a teacher account")
+
+        new_code = _generate_join_code(connection)
+        connection.execute(
+            "UPDATE users SET join_code = ? WHERE username = ?",
+            (new_code, teacher_username),
+        )
+        connection.commit()
+        return new_code
+    finally:
+        connection.close()
+
+
+def delete_user(username: str) -> None:
+    """Delete a user account and everything that references it (their
+    chats, teaching assignments, and subject links in either direction).
+    Raises ValueError if the username is unknown.
+
+    Used by the admin dashboard. There's no role branching here: each
+    DELETE only matches rows that actually exist for this user's role, so
+    it's safe to run all of them regardless of whether the account is a
+    student, a teacher, or an admin.
+    """
+    connection = db.get_connection()
+    try:
+        if connection.execute(
+            "SELECT 1 FROM users WHERE username = ?", (username,)
+        ).fetchone() is None:
+            raise ValueError("Username does not exist")
+
+        chat_ids = [
+            row["id"]
+            for row in connection.execute(
+                "SELECT id FROM chats WHERE username = ?", (username,)
+            )
+        ]
+        for chat_id in chat_ids:
+            connection.execute("DELETE FROM chat_messages WHERE chat_id = ?", (chat_id,))
+        connection.execute("DELETE FROM chats WHERE username = ?", (username,))
+
+        connection.execute(
+            "DELETE FROM subject_links WHERE student_username = ? OR teacher_username = ?",
+            (username, username),
+        )
+        connection.execute(
+            "DELETE FROM teaching_assignments WHERE teacher_username = ?", (username,)
+        )
+        connection.execute("DELETE FROM tests WHERE teacher_username = ?", (username,))
+        connection.execute("DELETE FROM users WHERE username = ?", (username,))
+        connection.commit()
     finally:
         connection.close()

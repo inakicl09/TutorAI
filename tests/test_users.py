@@ -1,6 +1,6 @@
 import pytest
 
-from tutorai import users
+from tutorai import chat_storage, users
 
 
 def test_create_and_verify_student_login():
@@ -80,6 +80,22 @@ def test_link_student_to_teacher_succeeds_when_teacher_teaches_it():
     assert users.students_linked_to_teacher("profesor_lopez") == ["ana"]
 
 
+def test_unlink_student_from_teacher_removes_only_that_link():
+    users.create_student("ana", "secret123", "1º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "1º ESO", "Matemáticas")
+    users.add_teaching_assignment("profesor_lopez", "2º ESO", "Matemáticas")
+    users.link_student_to_teacher("ana", "profesor_lopez", "1º ESO", "Matemáticas")
+    users.link_student_to_teacher("ana", "profesor_lopez", "2º ESO", "Matemáticas")
+
+    users.unlink_student_from_teacher("ana", "profesor_lopez", "1º ESO", "Matemáticas")
+
+    student = users.get_user("ana")
+    assert student["subject_links"] == [
+        {"grade": "2º ESO", "subject": "Matemáticas", "teacher": "profesor_lopez"}
+    ]
+
+
 def test_list_all_users_excludes_password_data():
     users.create_student("ana", "secret123", "1º ESO")
 
@@ -87,3 +103,80 @@ def test_list_all_users_excludes_password_data():
     assert len(all_users) == 1
     assert "password_hash" not in all_users[0]
     assert "salt" not in all_users[0]
+
+
+def test_list_all_users_is_alphabetical_and_filters_by_search_text():
+    users.create_student("zoe", "secret123", "1º ESO")
+    users.create_teacher("ana_profe", "secret123")
+    users.create_admin("mid_admin", "secret123")
+
+    assert [u["username"] for u in users.list_all_users()] == [
+        "ana_profe",
+        "mid_admin",
+        "zoe",
+    ]
+    assert [u["username"] for u in users.list_all_users("an")] == ["ana_profe"]
+
+
+def test_set_password_changes_login():
+    users.create_student("ana", "secret123", "1º ESO")
+
+    users.set_password("ana", "newpassword")
+
+    assert not users.verify_login("ana", "secret123")
+    assert users.verify_login("ana", "newpassword")
+
+
+def test_set_password_rejects_unknown_username():
+    with pytest.raises(ValueError):
+        users.set_password("nobody", "newpassword")
+
+
+def test_regenerate_join_code_changes_the_code_and_old_one_stops_working():
+    old_code = users.create_teacher("profesor_lopez", "secret123")
+
+    new_code = users.regenerate_join_code("profesor_lopez")
+
+    assert new_code != old_code
+    assert users.find_teacher_by_join_code(old_code) is None
+    assert users.find_teacher_by_join_code(new_code) == "profesor_lopez"
+
+
+def test_regenerate_join_code_rejects_non_teacher():
+    users.create_student("ana", "secret123", "1º ESO")
+
+    with pytest.raises(ValueError):
+        users.regenerate_join_code("ana")
+
+
+def test_delete_user_removes_student_and_their_data():
+    users.create_student("ana", "secret123", "1º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "1º ESO", "Matemáticas")
+    users.link_student_to_teacher("ana", "profesor_lopez", "1º ESO", "Matemáticas")
+    chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "system prompt text")
+    chat_storage.add_message(chat["id"], "user", "How do I solve this?")
+
+    users.delete_user("ana")
+
+    assert users.get_user("ana") is None
+    assert users.students_linked_to_teacher("profesor_lopez") == []
+    assert chat_storage.load_chats("ana") == []
+
+
+def test_delete_user_removes_teacher_and_their_assignments():
+    users.create_student("ana", "secret123", "1º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "1º ESO", "Matemáticas")
+    users.link_student_to_teacher("ana", "profesor_lopez", "1º ESO", "Matemáticas")
+
+    users.delete_user("profesor_lopez")
+
+    assert users.get_user("profesor_lopez") is None
+    student = users.get_user("ana")
+    assert student["subject_links"] == []
+
+
+def test_delete_user_rejects_unknown_username():
+    with pytest.raises(ValueError):
+        users.delete_user("nobody")
