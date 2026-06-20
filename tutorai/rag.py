@@ -7,7 +7,7 @@ from langchain_chroma import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_ollama import OllamaEmbeddings
 
-import config
+from tutorai import config
 
 
 def get_vector_store() -> Chroma:

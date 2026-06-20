@@ -5,7 +5,7 @@ per chat, one row per message, so chats survive restarting the app.
 from datetime import datetime, timezone
 from typing import Optional
 
-import db
+from tutorai import db
 
 
 def _now() -> str:

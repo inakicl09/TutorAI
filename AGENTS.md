@@ -15,8 +15,24 @@ working product.
 - Do not introduce layers of abstraction (interfaces, factories, dependency
   injection, plugin systems) for a project this size. One clear way to do
   things beats a flexible framework nobody asked for.
-- A flat, easy-to-follow script or small set of modules is better than a
-  deeply nested package structure.
+
+## Project layout
+- All app code lives in the `tutorai/` package (one flat level — no
+  sub-packages). Modules import each other with explicit absolute
+  imports, e.g. `from tutorai import db, config`, never relative `from .
+  import db`. This was a deliberate choice (2026-06-20) to give the
+  project a standard, installable package layout with a `tests/`
+  directory, while still keeping the module structure itself flat and
+  simple inside `tutorai/`.
+- Entry-point scripts (`app.py`, `tutor.py`, `create_admin.py`,
+  `seed_test_data.py`) are run with `python3 -m tutorai.<name>` (or, for
+  the Streamlit app, `python -m streamlit run tutorai/app.py`, which is
+  what `run.sh` does) — not as bare scripts — so the `-m` flag puts the
+  repo root on `sys.path` and the absolute imports resolve.
+- Tests live in `tests/`, mirroring `tutorai/` module-by-module
+  (`tests/test_users.py` tests `tutorai/users.py`, etc.), using `pytest`.
+  Every test gets a throwaway SQLite database via the `tests/conftest.py`
+  fixture, so tests never touch `data/tutorai.db`.
 
 ## Minimum libraries
 - Use Python's standard library first. Only reach for a third-party package

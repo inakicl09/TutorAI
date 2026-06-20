@@ -5,7 +5,7 @@ tests. Centralized here so every module talks to the same schema.
 import os
 import sqlite3
 
-import config
+from tutorai import config
 
 
 def get_connection() -> sqlite3.Connection:

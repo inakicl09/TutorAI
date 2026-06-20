@@ -1,6 +1,6 @@
 """One-time setup script: creates the single admin account.
 
-Run this yourself, locally: python3 create_admin.py
+Run this yourself, locally: python3 -m tutorai.create_admin
 
 This is intentionally not part of the regular app and has no signup path
 in the UI, so admin access stays limited to whoever runs this script.
@@ -10,8 +10,7 @@ appears in your shell history or in this conversation.
 
 import getpass
 
-import db
-import users
+from tutorai import db, users
 
 
 def main() -> None:

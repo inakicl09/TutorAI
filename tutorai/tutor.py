@@ -1,5 +1,5 @@
 """TutorAI prototype: a Socratic tutor powered by a local Ollama model.
-Run this in iTerm with: python3 tutor.py
+Run this in iTerm with: python3 -m tutorai.tutor
 
 This is the original command-line prototype, kept for quick testing
 without Streamlit. The rich teacher/admin dashboards (search by
@@ -12,13 +12,7 @@ import json
 import urllib.error
 import urllib.request
 
-import chat_storage
-import config
-import db
-import prompts
-import subjects
-import translations
-import users
+from tutorai import chat_storage, config, db, prompts, subjects, translations, users
 
 QUIT_WORDS = {"quit", "exit", "salir"}
 

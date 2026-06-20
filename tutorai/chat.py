@@ -5,9 +5,7 @@ material, and the Ollama model to produce the tutor's replies.
 import json
 import urllib.request
 
-import config
-import prompts
-import rag
+from tutorai import config, prompts, rag
 
 
 def get_available_models() -> list[str]:

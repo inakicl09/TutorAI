@@ -7,7 +7,7 @@
   their join code, and look at their linked students' chats.
 - The single Admin account (see create_admin.py) can see every user.
 
-Run this in iTerm with: streamlit run app.py
+Run this in iTerm with: python3 -m streamlit run tutorai/app.py
 """
 
 import os
@@ -15,15 +15,7 @@ import urllib.error
 
 import streamlit as st
 
-import chat
-import chat_storage
-import config
-import db
-import prompts
-import rag
-import subjects
-import translations
-import users
+from tutorai import chat, chat_storage, config, db, prompts, rag, subjects, translations, users
 
 db.init_db()
 

@@ -20,7 +20,7 @@ import secrets
 import string
 from typing import Optional
 
-import db
+from tutorai import db
 
 PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6

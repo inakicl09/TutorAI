@@ -19,4 +19,7 @@ fi
 
 # --server.headless skips Streamlit's first-run "enter your email" prompt,
 # which otherwise blocks silently when run from a script instead of a TTY.
-streamlit run app.py --server.headless true
+# Using "python -m streamlit" (not the bare "streamlit" command) adds this
+# directory to sys.path, which is what lets tutorai/app.py import the rest
+# of the tutorai package with "from tutorai import ...".
+python -m streamlit run tutorai/app.py --server.headless true

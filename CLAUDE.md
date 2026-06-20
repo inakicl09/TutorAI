@@ -11,14 +11,18 @@ A Socratic tutoring app for Spanish secondary school students (1º ESO to
 account types (student / teacher / admin) with role-based access.
 
 Two interfaces share the same logic:
-- `app.py` — Streamlit web UI (the main one, has the full teacher/admin
-  dashboards).
-- `tutor.py` — command-line prototype. Students can log in, link a
-  teacher by join code, and chat. Teacher/admin accounts just get a
+- `tutorai/app.py` — Streamlit web UI (the main one, has the full
+  teacher/admin dashboards).
+- `tutorai/tutor.py` — command-line prototype. Students can log in, link
+  a teacher by join code, and chat. Teacher/admin accounts just get a
   message pointing them to the web app — building a parallel text UI for
   search/browse/dashboards wasn't worth it for a CLI test harness.
 
 ## Architecture
+
+All app code lives in the `tutorai/` package (flat — no sub-packages),
+with a `tests/` directory alongside it (see "Testing" below). Modules
+import each other with absolute imports, e.g. `from tutorai import db`.
 
 - `config.py` — Ollama URLs, model names, file paths, RAG chunk settings,
   the SQLite `DB_PATH`.
@@ -41,9 +45,9 @@ Two interfaces share the same logic:
   - Passwords are hashed with `hashlib.pbkdf2_hmac` + a random per-user
     salt (`secrets.token_hex`), both stdlib — never stored in plain text.
 - `create_admin.py` — one-time setup script you run yourself
-  (`python3 create_admin.py`). Uses `getpass` so the password is never
-  typed into chat or shell history. No other way to create an admin
-  account exists.
+  (`python3 -m tutorai.create_admin`). Uses `getpass` so the password is
+  never typed into chat or shell history. No other way to create an
+  admin account exists.
 - `subjects.py` — official grade → subject list (39 distinct subjects
   across 6 grades, from the Madrid LOMLOE curriculum).
 - `prompts.py` — builds each system prompt from three pieces: a
@@ -75,7 +79,24 @@ Two interfaces share the same logic:
     "Tests" section that's just a "coming soon" placeholder.
   - **admin**: lists every user and their role. Nothing more yet.
 - `run.sh` — creates `.venv` and installs `requirements.txt` on first run,
-  then launches `streamlit run app.py --server.headless true`.
+  then launches `python -m streamlit run tutorai/app.py --server.headless
+  true`. Using `python -m streamlit` (not the bare `streamlit` command)
+  is what puts the repo root on `sys.path` so `tutorai/app.py`'s
+  `from tutorai import ...` imports resolve.
+
+## Testing
+
+- `tests/` mirrors `tutorai/` module-by-module (`tests/test_users.py`
+  tests `tutorai/users.py`, etc.), using `pytest`.
+- `tests/conftest.py` has an autouse fixture that points `config.DB_PATH`
+  at a temp file and calls `db.init_db()` before every test, so the test
+  suite never touches `data/tutorai.db`.
+- `rag.py` isn't unit tested — it needs a real Ollama embedding model
+  running, which isn't worth mocking for this project's size. `chat.py`'s
+  pure logic (filtering the embedding model out of `get_available_models`)
+  is tested with a mocked `urlopen`; `ask_tutor` (which also hits RAG) is
+  not.
+- Run with: `pip install -r requirements-dev.txt && pytest`.
 
 ## Setup already done on this machine
 
@@ -83,8 +104,8 @@ Two interfaces share the same logic:
   langchain-chroma, chromadb, pypdf (see `requirements.txt`).
 - Pulled `nomic-embed-text` via `ollama pull` for embeddings.
 - `ollama serve` must be running for either interface to work.
-- No admin account exists yet — run `python3 create_admin.py` once to
-  create one.
+- No admin account exists yet — run `python3 -m tutorai.create_admin`
+  once to create one.
 
 ## Known gotcha (fixed)
 
@@ -112,6 +133,13 @@ confirming `./run.sh` still starts cleanly.
   code — both paths were explicitly requested, not just one.
 - Subject/grade names are kept as official Spanish curriculum terms in
   both language modes (not translated).
+- Moved all modules from flat root-level files into a `tutorai/` package
+  plus a `tests/` directory with `pytest` coverage (user's explicit
+  choice, 2026-06-20, overriding `AGENTS.md`'s earlier "keep it flat, no
+  package structure" guidance — `AGENTS.md` has been updated to match).
+  Entry-point scripts are now run as `python3 -m tutorai.<name>`, and the
+  Streamlit app as `python -m streamlit run tutorai/app.py`, instead of
+  as bare scripts, so the package's absolute imports resolve.
 
 ## Known gotcha (db.py / users.py / chat_storage.py)
 

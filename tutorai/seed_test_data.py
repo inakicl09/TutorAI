@@ -2,7 +2,7 @@
 dashboards and the new student-activity view without signing up 100
 accounts by hand.
 
-Run it yourself: python3 seed_test_data.py
+Run it yourself: python3 -m tutorai.seed_test_data
 
 Creates ~10 teachers and ~100 students (password "test1234" for all of
 them), links most students to one or more teachers, and gives about half
@@ -14,11 +14,7 @@ exist are skipped instead of erroring.
 import random
 from datetime import datetime, timedelta, timezone
 
-import chat_storage
-import db
-import prompts
-import subjects
-import users
+from tutorai import chat_storage, db, prompts, subjects, users
 
 PASSWORD = "test1234"
 NUM_TEACHERS = 10
