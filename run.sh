@@ -17,4 +17,6 @@ else
     source "$VENV_DIR/bin/activate"
 fi
 
-streamlit run app.py
+# --server.headless skips Streamlit's first-run "enter your email" prompt,
+# which otherwise blocks silently when run from a script instead of a TTY.
+streamlit run app.py --server.headless true
