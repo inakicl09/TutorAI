@@ -175,38 +175,44 @@ else:  # role == "student"
         )
 
         if link_method == text["link_method_search"]:
-            search_grade = st.selectbox(
-                text["grade_label"], options=subjects.GRADES, key="search_grade"
-            )
-            search_subject = st.selectbox(
-                text["subject_label"],
-                options=subjects.GRADE_SUBJECTS[search_grade],
-                key="search_subject",
-            )
             search_text = st.text_input(text["search_teacher_label"], key="search_text")
 
-            matching_teachers = set(
-                users.find_teachers_for_subject_grade(search_grade, search_subject)
-            )
-            if search_text:
-                matching_teachers &= set(users.find_teachers(search_text))
-            matching_teachers = sorted(matching_teachers)
+            # find_teachers already returns alphabetical order, and since
+            # Streamlit reruns the script on every text_input change, this
+            # list re-filters itself as the student types.
+            matching_teachers = users.find_teachers(search_text)
 
             if not matching_teachers:
                 st.caption(text["no_teachers_found"])
             else:
-                chosen_teacher = st.selectbox(
-                    text["select_teacher_label"], options=matching_teachers, key="search_pick"
-                )
-                if st.button(text["link_button"], key="link_search_button"):
-                    users.link_student_to_teacher(
-                        st.session_state.username,
-                        chosen_teacher,
-                        search_grade,
-                        search_subject,
-                    )
-                    st.success(text["link_success"])
-                    st.rerun()
+                for teacher_username in matching_teachers:
+                    teacher_record = users.get_user(teacher_username)
+                    with st.expander(teacher_username):
+                        if not teacher_record["teaching"]:
+                            st.caption(text["no_teaching_message"])
+                            continue
+
+                        teaching_labels = [
+                            f"{a['subject']} ({a['grade']})"
+                            for a in teacher_record["teaching"]
+                        ]
+                        chosen_label = st.selectbox(
+                            text["select_teacher_label"],
+                            options=teaching_labels,
+                            key=f"search_pick_{teacher_username}",
+                        )
+                        chosen_assignment = teacher_record["teaching"][
+                            teaching_labels.index(chosen_label)
+                        ]
+                        if st.button(text["link_button"], key=f"link_search_{teacher_username}"):
+                            users.link_student_to_teacher(
+                                st.session_state.username,
+                                teacher_username,
+                                chosen_assignment["grade"],
+                                chosen_assignment["subject"],
+                            )
+                            st.success(text["link_success"])
+                            st.rerun()
         else:
             join_code_input = st.text_input(text["join_code_input_label"], key="join_code_input")
             if join_code_input:

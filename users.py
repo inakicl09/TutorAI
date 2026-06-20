@@ -182,28 +182,16 @@ def add_teaching_assignment(teacher_username: str, grade: str, subject: str) -> 
 
 
 def find_teachers(search_text: str = "") -> list[str]:
-    """List teacher usernames, optionally filtered by a search term."""
+    """List teacher usernames in alphabetical order, optionally filtered
+    by a search term."""
     connection = db.get_connection()
     try:
         rows = connection.execute(
-            "SELECT username FROM users WHERE role = 'teacher' AND username LIKE ?",
+            "SELECT username FROM users WHERE role = 'teacher' AND username LIKE ? "
+            "ORDER BY username COLLATE NOCASE",
             (f"%{search_text}%",),
         )
         return [row["username"] for row in rows]
-    finally:
-        connection.close()
-
-
-def find_teachers_for_subject_grade(grade: str, subject: str) -> list[str]:
-    """List teacher usernames who teach this exact grade+subject."""
-    connection = db.get_connection()
-    try:
-        rows = connection.execute(
-            "SELECT teacher_username FROM teaching_assignments "
-            "WHERE grade = ? AND subject = ?",
-            (grade, subject),
-        )
-        return [row["teacher_username"] for row in rows]
     finally:
         connection.close()
 
