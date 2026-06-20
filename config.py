@@ -7,6 +7,8 @@ EMBEDDING_MODEL_NAME = "nomic-embed-text"
 
 DOCUMENTS_DIR = "data/documents"
 CHROMA_DIR = "data/chroma_db"
+USERS_FILE = "data/users.json"
+CHATS_DIR = "data/chats"
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200

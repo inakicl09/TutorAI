@@ -209,3 +209,7 @@ __marimo__/
 # TutorAI: chromaDB persisted vector store (regenerated from data/documents)
 data/chroma_db/*
 !data/chroma_db/.gitkeep
+
+# TutorAI: user accounts (password hashes) and saved per-user chats
+data/users.json
+data/chats/

@@ -1,6 +1,6 @@
-"""Streamlit UI for TutorAI: lets students create chats per grade and
+"""Streamlit UI for TutorAI: students log in, create chats per grade and
 subject, upload PDFs of their course material, and chat with the
-Socratic tutor.
+Socratic tutor. Each student's chats are saved to disk under data/chats.
 
 Run this in iTerm with: streamlit run app.py
 """
@@ -11,20 +11,20 @@ import urllib.error
 import streamlit as st
 
 import chat
+import chat_storage
 import config
 import prompts
 import rag
 import subjects
 import translations
+import users
 
 st.set_page_config(page_title="TutorAI", page_icon="📚")
 
-if "chats" not in st.session_state:
-    st.session_state.chats = []
-if "active_chat_id" not in st.session_state:
-    st.session_state.active_chat_id = None
-if "next_chat_id" not in st.session_state:
-    st.session_state.next_chat_id = 1
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "chats_loaded" not in st.session_state:
+    st.session_state.chats_loaded = False
 
 with st.sidebar:
     language = st.selectbox(
@@ -33,6 +33,53 @@ with st.sidebar:
         format_func=lambda code: "Español" if code == "es" else "English",
     )
     text = translations.TEXT[language]
+
+if st.session_state.username is None:
+    st.title(text["app_title"])
+
+    auth_mode = st.radio(
+        text["app_title"],
+        [text["login_tab"], text["signup_tab"]],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    username_input = st.text_input(text["username_label"])
+    password_input = st.text_input(text["password_label"], type="password")
+
+    if auth_mode == text["login_tab"]:
+        if st.button(text["login_button"]):
+            if users.verify_login(username_input, password_input):
+                st.session_state.username = username_input
+                st.rerun()
+            else:
+                st.error(text["login_failed_error"])
+    else:
+        if st.button(text["signup_button"]):
+            if not username_input or not password_input:
+                st.error(text["signup_missing_fields_error"])
+            elif users.username_exists(username_input):
+                st.error(text["signup_username_taken_error"])
+            else:
+                users.create_user(username_input, password_input)
+                st.session_state.username = username_input
+                st.rerun()
+
+    st.stop()
+
+if not st.session_state.chats_loaded:
+    st.session_state.chats = chat_storage.load_chats(st.session_state.username)
+    st.session_state.active_chat_id = None
+    st.session_state.next_chat_id = (
+        max((c["id"] for c in st.session_state.chats), default=0) + 1
+    )
+    st.session_state.chats_loaded = True
+
+with st.sidebar:
+    st.write(f"{text['logged_in_as']} **{st.session_state.username}**")
+    if st.button(text["logout_button"]):
+        st.session_state.username = None
+        st.session_state.chats_loaded = False
+        st.rerun()
 
     st.header(text["new_chat_header"])
     grade = st.selectbox(text["grade_label"], options=subjects.GRADES)
@@ -53,6 +100,7 @@ with st.sidebar:
         st.session_state.chats.append(new_chat)
         st.session_state.active_chat_id = new_chat["id"]
         st.session_state.next_chat_id += 1
+        chat_storage.save_chats(st.session_state.username, st.session_state.chats)
 
     st.header(text["chats_header"])
     if not st.session_state.chats:
@@ -140,3 +188,5 @@ else:
 
         with st.chat_message("assistant"):
             st.write(tutor_reply)
+
+        chat_storage.save_chats(st.session_state.username, st.session_state.chats)
