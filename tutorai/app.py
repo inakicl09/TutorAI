@@ -1,12 +1,14 @@
-"""Streamlit UI for TutorAI. Three account types:
+"""Streamlit UI for TutorAI. Three account types, each with their own
+sidebar-navigable screens (the LLM persona name is the page title, the
+screen picker lives right below the login/logout controls):
 
-- Students log in, link to teachers (by search or join code), create
-  chats for the grade+subject combos a teacher has unlocked for them,
-  and chat with the Socratic tutor.
-- Teachers log in, declare which grade+subject combos they teach, look
-  at their linked students' chats, and draft/save tests by chatting with
-  Logos (no RAG -- Logos doesn't search course documents).
-- The single Admin account (see create_admin.py) can see every user.
+- Students (Socrates): a main menu, the chat itself, linking a teacher,
+  and uploading course material for RAG.
+- Teachers (Logos): a main menu, supervising linked students' activity,
+  managing their own classes, and drafting/saving tests with Logos (no
+  RAG -- Logos doesn't search course documents).
+- The single Admin account (Artemis, see create_admin.py): a main menu,
+  adding users, and two filterable menus for browsing teachers/students.
 
 Run this in iTerm with: python3 -m streamlit run tutorai/app.py
 """
@@ -41,6 +43,8 @@ if "username" not in st.session_state:
     st.session_state.username = None
 if "chats_loaded" not in st.session_state:
     st.session_state.chats_loaded = False
+if "test_chats_loaded" not in st.session_state:
+    st.session_state.test_chats_loaded = False
 
 with st.sidebar:
     language = st.selectbox(
@@ -96,19 +100,48 @@ if st.session_state.username is None:
 current_user = users.get_user(st.session_state.username)
 role = current_user["role"]
 
+# Each role's sidebar screens, in nav order. The label keys are looked up
+# in translations.py so the tab names follow the chosen UI language.
+SCREENS_BY_ROLE = {
+    "admin": [
+        ("main_menu", "screen_main_menu"),
+        ("add_user", "add_user_header"),
+        ("teachers", "admin_teachers_menu_header"),
+        ("students", "admin_students_menu_header"),
+    ],
+    "teacher": [
+        ("main_menu", "screen_main_menu"),
+        ("supervise", "screen_supervise"),
+        ("my_classes", "screen_my_classes"),
+        ("tests", "tests_header"),
+    ],
+    "student": [
+        ("main_menu", "screen_main_menu"),
+        ("chat", "screen_chat"),
+        ("link_teacher", "screen_link_teacher"),
+        ("material", "screen_material"),
+    ],
+}
+
 with st.sidebar:
     st.write(f"{text['logged_in_as']} **{st.session_state.username}** ({text[f'role_{role}']})")
     if st.button(text["logout_button"]):
         st.session_state.username = None
         st.session_state.chats_loaded = False
+        st.session_state.test_chats_loaded = False
         st.rerun()
+
+    screen_ids = [screen_id for screen_id, _ in SCREENS_BY_ROLE[role]]
+    screen_labels = [text[label_key] for _, label_key in SCREENS_BY_ROLE[role]]
+    chosen_screen_label = st.radio(text["screen_nav_label"], screen_labels, key="screen_nav")
+    screen = screen_ids[screen_labels.index(chosen_screen_label)]
 
 st.title(config.ASSISTANT_NAMES[role])
 
 
 def render_change_password_and_delete(username: str, text: dict) -> None:
     """Shared password-change and delete-with-confirm controls for any
-    user, used by both the Teachers and Students admin menus."""
+    user, used by both the Teachers and Students admin screens."""
     new_user_password = st.text_input(
         text["new_password_label"], type="password", key=f"newpw_{username}"
     )
@@ -144,416 +177,482 @@ def render_change_password_and_delete(username: str, text: dict) -> None:
 
 
 if role == "admin":
-    st.subheader(text["admin_dashboard_header"])
+    if screen == "main_menu":
+        st.write(text["welcome_message"].format(username=st.session_state.username))
 
-    st.header(text["add_user_header"])
-    new_username = st.text_input(text["username_label"], key="admin_new_username")
-    new_password = st.text_input(
-        text["password_label"], type="password", key="admin_new_password"
-    )
-    new_role = st.radio(
-        text["role_label"],
-        [text["role_student"], text["role_teacher"]],
-        key="admin_new_role",
-    )
-    new_grade = None
-    if new_role == text["role_student"]:
-        new_grade = st.selectbox(text["grade_label"], options=subjects.GRADES, key="admin_new_grade")
+        all_users = users.list_all_users()
+        stat_columns = st.columns(4)
+        with stat_columns[0]:
+            st.metric(text["stat_total_students"], sum(1 for u in all_users if u["role"] == "student"))
+        with stat_columns[1]:
+            st.metric(text["stat_total_teachers"], sum(1 for u in all_users if u["role"] == "teacher"))
+        with stat_columns[2]:
+            st.metric(text["stat_total_classes"], len(classes.list_classes()))
+        with stat_columns[3]:
+            st.metric(text["stat_total_homerooms"], len(homerooms.list_homerooms()))
 
-    if st.button(text["add_user_button"]):
-        if not new_username or not new_password:
-            st.error(text["signup_missing_fields_error"])
-        elif users.username_exists(new_username):
-            st.error(text["signup_username_taken_error"])
-        elif new_role == text["role_student"]:
-            users.create_student(new_username, new_password, new_grade)
-            st.success(text["add_user_success"])
-            st.rerun()
+    elif screen == "add_user":
+        st.header(text["add_user_header"])
+        new_username = st.text_input(text["username_label"], key="admin_new_username")
+        new_password = st.text_input(
+            text["password_label"], type="password", key="admin_new_password"
+        )
+        new_role = st.radio(
+            text["role_label"],
+            [text["role_student"], text["role_teacher"]],
+            key="admin_new_role",
+        )
+        new_grade = None
+        if new_role == text["role_student"]:
+            new_grade = st.selectbox(
+                text["grade_label"], options=subjects.GRADES, key="admin_new_grade"
+            )
+
+        if st.button(text["add_user_button"]):
+            if not new_username or not new_password:
+                st.error(text["signup_missing_fields_error"])
+            elif users.username_exists(new_username):
+                st.error(text["signup_username_taken_error"])
+            elif new_role == text["role_student"]:
+                users.create_student(new_username, new_password, new_grade)
+                st.success(text["add_user_success"])
+                st.rerun()
+            else:
+                join_code = users.create_teacher(new_username, new_password)
+                st.success(f"{text['add_user_success']} {text['join_code_label']}: {join_code}")
+                st.rerun()
+
+    elif screen == "teachers":
+        st.header(text["admin_teachers_menu_header"])
+        teacher_grade_filter = st.selectbox(
+            text["filter_by_grade_label"],
+            options=[text["all_grades_option"]] + subjects.GRADES,
+            key="teacher_filter_grade",
+        )
+        teacher_search_text = st.text_input(
+            text["search_teacher_label"], key="teacher_filter_search"
+        )
+
+        matching_teacher_usernames = {
+            u["username"] for u in users.list_all_users(teacher_search_text, role="teacher")
+        }
+        if teacher_grade_filter != text["all_grades_option"]:
+            matching_teacher_usernames &= {
+                class_record["teacher_username"]
+                for class_record in classes.list_classes(grade=teacher_grade_filter)
+            }
+
+        if not matching_teacher_usernames:
+            st.caption(text["no_matching_users_message"])
         else:
-            join_code = users.create_teacher(new_username, new_password)
-            st.success(f"{text['add_user_success']} {text['join_code_label']}: {join_code}")
-            st.rerun()
+            for teacher_username in sorted(matching_teacher_usernames):
+                teacher_record = users.get_user(teacher_username)
+                with st.expander(teacher_username):
+                    teacher_password = users.get_plaintext_password(teacher_username)
+                    if teacher_password is not None:
+                        st.write(f"{text['password_label_admin_view']}: `{teacher_password}`")
+                    else:
+                        st.caption(text["password_not_available_message"])
 
-    st.header(text["admin_teachers_menu_header"])
-    teacher_grade_filter = st.selectbox(
-        text["filter_by_grade_label"],
-        options=[text["all_grades_option"]] + subjects.GRADES,
-        key="teacher_filter_grade",
-    )
-    teacher_search_text = st.text_input(text["search_teacher_label"], key="teacher_filter_search")
+                    st.write(f"{text['join_code_label']}: `{teacher_record['join_code']}`")
+                    if st.button(
+                        text["regenerate_join_code_button"], key=f"regen_{teacher_username}"
+                    ):
+                        new_code = users.regenerate_join_code(teacher_username)
+                        st.success(f"{text['join_code_label']}: {new_code}")
+                        st.rerun()
 
-    matching_teacher_usernames = {
-        u["username"] for u in users.list_all_users(teacher_search_text, role="teacher")
-    }
-    if teacher_grade_filter != text["all_grades_option"]:
-        matching_teacher_usernames &= {
-            class_record["teacher_username"]
-            for class_record in classes.list_classes(grade=teacher_grade_filter)
-        }
-
-    if not matching_teacher_usernames:
-        st.caption(text["no_matching_users_message"])
-    else:
-        for teacher_username in sorted(matching_teacher_usernames):
-            teacher_record = users.get_user(teacher_username)
-            with st.expander(teacher_username):
-                teacher_password = users.get_plaintext_password(teacher_username)
-                if teacher_password is not None:
-                    st.write(f"{text['password_label_admin_view']}: `{teacher_password}`")
-                else:
-                    st.caption(text["password_not_available_message"])
-
-                st.write(f"{text['join_code_label']}: `{teacher_record['join_code']}`")
-                if st.button(text["regenerate_join_code_button"], key=f"regen_{teacher_username}"):
-                    new_code = users.regenerate_join_code(teacher_username)
-                    st.success(f"{text['join_code_label']}: {new_code}")
-                    st.rerun()
-
-                st.write(f"**{text['teaching_list_label']}**")
-                if not teacher_record["teaching"]:
-                    st.caption(text["no_teaching_message"])
-                else:
-                    for assignment in teacher_record["teaching"]:
-                        class_record = classes.get_or_create_class(
-                            teacher_username, assignment["grade"], assignment["subject"]
-                        )
-                        student_count = len(classes.students_in_class(class_record["id"]))
-                        st.write(
-                            f"- {assignment['subject']} ({assignment['grade']}) "
-                            f"— {student_count} {text['admin_students_menu_header'].lower()}"
-                        )
-
-                render_change_password_and_delete(teacher_username, text)
-
-    st.header(text["admin_students_menu_header"])
-    student_grade_filter = st.selectbox(
-        text["filter_by_grade_label"],
-        options=[text["all_grades_option"]] + subjects.GRADES,
-        key="student_filter_grade",
-    )
-    classes_for_filter = classes.list_classes(
-        grade=None if student_grade_filter == text["all_grades_option"] else student_grade_filter
-    )
-    class_filter_choice = st.selectbox(
-        text["filter_by_class_label"],
-        options=[text["all_classes_option"]] + [c["name"] for c in classes_for_filter],
-        key="student_filter_class",
-    )
-    student_search_text = st.text_input(text["search_teacher_label"], key="student_filter_search")
-
-    matching_student_usernames = {
-        u["username"] for u in users.list_all_users(student_search_text, role="student")
-    }
-    if student_grade_filter != text["all_grades_option"]:
-        matching_student_usernames = {
-            username
-            for username in matching_student_usernames
-            if users.get_user(username)["grade"] == student_grade_filter
-        }
-    if class_filter_choice != text["all_classes_option"]:
-        chosen_class = next(c for c in classes_for_filter if c["name"] == class_filter_choice)
-        matching_student_usernames &= set(classes.students_in_class(chosen_class["id"]))
-
-    if not matching_student_usernames:
-        st.caption(text["no_matching_users_message"])
-    else:
-        for student_username in sorted(matching_student_usernames):
-            student_record = users.get_user(student_username)
-            with st.expander(student_username):
-                student_password = users.get_plaintext_password(student_username)
-                if student_password is not None:
-                    st.write(f"{text['password_label_admin_view']}: `{student_password}`")
-                else:
-                    st.caption(text["password_not_available_message"])
-
-                st.write(f"{text['grade_label']}: {student_record['grade']}")
-                st.write(f"{text['homeroom_label']}: {student_record['homeroom_name'] or '—'}")
-
-                st.write(f"**{text['links_list_label']}**")
-                if not student_record["subject_links"]:
-                    st.caption(text["no_links_message"])
-                else:
-                    for link in student_record["subject_links"]:
-                        link_col, remove_col = st.columns([4, 1])
-                        with link_col:
-                            st.write(f"- {link['subject']} ({link['grade']}) — {link['teacher']}")
-                        with remove_col:
-                            remove_key = (
-                                f"unlink_{student_username}_{link['teacher']}_"
-                                f"{link['grade']}_{link['subject']}"
-                            )
-                            if st.button(text["remove_link_button"], key=remove_key):
-                                users.unlink_student_from_teacher(
-                                    student_username,
-                                    link["teacher"],
-                                    link["grade"],
-                                    link["subject"],
-                                )
-                                st.success(text["link_removed_message"])
-                                st.rerun()
-
-                st.write(f"**{text['add_link_header']}**")
-                all_teacher_usernames = [u["username"] for u in users.list_all_users(role="teacher")]
-                if not all_teacher_usernames:
-                    st.caption(text["no_teachers_found"])
-                else:
-                    chosen_teacher = st.selectbox(
-                        text["select_teacher_label"],
-                        options=all_teacher_usernames,
-                        key=f"admin_link_teacher_{student_username}",
-                    )
-                    teacher_teaching = users.get_user(chosen_teacher)["teaching"]
-                    if not teacher_teaching:
+                    st.write(f"**{text['teaching_list_label']}**")
+                    if not teacher_record["teaching"]:
                         st.caption(text["no_teaching_message"])
                     else:
-                        teaching_labels = [
-                            f"{a['subject']} ({a['grade']})" for a in teacher_teaching
-                        ]
-                        chosen_label = st.selectbox(
-                            text["subject_label"],
-                            options=teaching_labels,
-                            key=f"admin_link_subject_{student_username}",
-                        )
-                        chosen_assignment = teacher_teaching[teaching_labels.index(chosen_label)]
-                        if st.button(
-                            text["link_button"], key=f"admin_link_button_{student_username}"
-                        ):
-                            try:
-                                users.link_student_to_teacher(
-                                    student_username,
-                                    chosen_teacher,
-                                    chosen_assignment["grade"],
-                                    chosen_assignment["subject"],
-                                )
-                                st.success(text["link_success"])
-                                st.rerun()
-                            except ValueError:
-                                st.error(text["link_failed_error"])
+                        for assignment in teacher_record["teaching"]:
+                            class_record = classes.get_or_create_class(
+                                teacher_username, assignment["grade"], assignment["subject"]
+                            )
+                            student_count = len(classes.students_in_class(class_record["id"]))
+                            st.write(
+                                f"- {assignment['subject']} ({assignment['grade']}) "
+                                f"— {student_count} {text['admin_students_menu_header'].lower()}"
+                            )
 
-                render_change_password_and_delete(student_username, text)
+                    render_change_password_and_delete(teacher_username, text)
+
+    elif screen == "students":
+        st.header(text["admin_students_menu_header"])
+        student_grade_filter = st.selectbox(
+            text["filter_by_grade_label"],
+            options=[text["all_grades_option"]] + subjects.GRADES,
+            key="student_filter_grade",
+        )
+        classes_for_filter = classes.list_classes(
+            grade=None
+            if student_grade_filter == text["all_grades_option"]
+            else student_grade_filter
+        )
+        class_filter_choice = st.selectbox(
+            text["filter_by_class_label"],
+            options=[text["all_classes_option"]] + [c["name"] for c in classes_for_filter],
+            key="student_filter_class",
+        )
+        student_search_text = st.text_input(
+            text["search_teacher_label"], key="student_filter_search"
+        )
+
+        matching_student_usernames = {
+            u["username"] for u in users.list_all_users(student_search_text, role="student")
+        }
+        if student_grade_filter != text["all_grades_option"]:
+            matching_student_usernames = {
+                username
+                for username in matching_student_usernames
+                if users.get_user(username)["grade"] == student_grade_filter
+            }
+        if class_filter_choice != text["all_classes_option"]:
+            chosen_class = next(c for c in classes_for_filter if c["name"] == class_filter_choice)
+            matching_student_usernames &= set(classes.students_in_class(chosen_class["id"]))
+
+        if not matching_student_usernames:
+            st.caption(text["no_matching_users_message"])
+        else:
+            for student_username in sorted(matching_student_usernames):
+                student_record = users.get_user(student_username)
+                with st.expander(student_username):
+                    student_password = users.get_plaintext_password(student_username)
+                    if student_password is not None:
+                        st.write(f"{text['password_label_admin_view']}: `{student_password}`")
+                    else:
+                        st.caption(text["password_not_available_message"])
+
+                    st.write(f"{text['grade_label']}: {student_record['grade']}")
+                    st.write(
+                        f"{text['homeroom_label']}: {student_record['homeroom_name'] or '—'}"
+                    )
+
+                    st.write(f"**{text['links_list_label']}**")
+                    if not student_record["subject_links"]:
+                        st.caption(text["no_links_message"])
+                    else:
+                        for link in student_record["subject_links"]:
+                            link_col, remove_col = st.columns([4, 1])
+                            with link_col:
+                                st.write(
+                                    f"- {link['subject']} ({link['grade']}) — {link['teacher']}"
+                                )
+                            with remove_col:
+                                remove_key = (
+                                    f"unlink_{student_username}_{link['teacher']}_"
+                                    f"{link['grade']}_{link['subject']}"
+                                )
+                                if st.button(text["remove_link_button"], key=remove_key):
+                                    users.unlink_student_from_teacher(
+                                        student_username,
+                                        link["teacher"],
+                                        link["grade"],
+                                        link["subject"],
+                                    )
+                                    st.success(text["link_removed_message"])
+                                    st.rerun()
+
+                    st.write(f"**{text['add_link_header']}**")
+                    all_teacher_usernames = [
+                        u["username"] for u in users.list_all_users(role="teacher")
+                    ]
+                    if not all_teacher_usernames:
+                        st.caption(text["no_teachers_found"])
+                    else:
+                        chosen_teacher = st.selectbox(
+                            text["select_teacher_label"],
+                            options=all_teacher_usernames,
+                            key=f"admin_link_teacher_{student_username}",
+                        )
+                        teacher_teaching = users.get_user(chosen_teacher)["teaching"]
+                        if not teacher_teaching:
+                            st.caption(text["no_teaching_message"])
+                        else:
+                            teaching_labels = [
+                                f"{a['subject']} ({a['grade']})" for a in teacher_teaching
+                            ]
+                            chosen_label = st.selectbox(
+                                text["subject_label"],
+                                options=teaching_labels,
+                                key=f"admin_link_subject_{student_username}",
+                            )
+                            chosen_assignment = teacher_teaching[
+                                teaching_labels.index(chosen_label)
+                            ]
+                            if st.button(
+                                text["link_button"], key=f"admin_link_button_{student_username}"
+                            ):
+                                try:
+                                    users.link_student_to_teacher(
+                                        student_username,
+                                        chosen_teacher,
+                                        chosen_assignment["grade"],
+                                        chosen_assignment["subject"],
+                                    )
+                                    st.success(text["link_success"])
+                                    st.rerun()
+                                except ValueError:
+                                    st.error(text["link_failed_error"])
+
+                    render_change_password_and_delete(student_username, text)
 
 elif role == "teacher":
-    st.subheader(text["teacher_dashboard_header"])
-    st.write(f"{text['join_code_label']}: `{current_user['join_code']}`")
+    if screen == "main_menu":
+        st.write(text["welcome_message"].format(username=st.session_state.username))
+        st.write(f"{text['join_code_label']}: `{current_user['join_code']}`")
 
-    st.header(text["add_teaching_header"])
-    add_grade = st.selectbox(text["grade_label"], options=subjects.GRADES, key="add_teaching_grade")
-    add_subject = st.selectbox(
-        text["subject_label"],
-        options=subjects.GRADE_SUBJECTS[add_grade],
-        key="add_teaching_subject",
-    )
-    if st.button(text["add_teaching_button"]):
-        users.add_teaching_assignment(st.session_state.username, add_grade, add_subject)
-        st.rerun()
-
-    st.header(text["your_subjects_header"])
-    if not current_user["teaching"]:
-        st.caption(text["no_teaching_message"])
-    else:
-        for assignment in current_user["teaching"]:
-            st.write(f"- {assignment['subject']} ({assignment['grade']})")
-
-    st.header(text["your_students_header"])
-    linked_students = users.students_linked_to_teacher(st.session_state.username)
-    if not linked_students:
-        st.caption(text["no_students_message"])
-    else:
-        for student_username in linked_students:
-            student_record = users.get_user(student_username)
-            relevant_links = [
-                link
-                for link in student_record["subject_links"]
-                if link["teacher"] == st.session_state.username
-            ]
-            student_chats = chat_storage.load_chats(student_username)
-            relevant_chats = [
-                c
-                for c in student_chats
-                if any(
-                    c["grade"] == link["grade"] and c["subject"] == link["subject"]
-                    for link in relevant_links
-                )
-            ]
-            non_system_messages = [
-                m for c in relevant_chats for m in c["history"] if m["role"] != "system"
-            ]
-            message_count = len(non_system_messages)
-            timestamps = [m["created_at"] for m in non_system_messages if m.get("created_at")]
-            last_active = max(timestamps) if timestamps else text["no_activity_yet"]
-
-            expander_label = (
-                f"{student_username} — {text['messages_count_label']}: {message_count} · "
-                f"{text['last_active_label']}: {last_active}"
+        stat_columns = st.columns(3)
+        with stat_columns[0]:
+            st.metric(text["stat_classes_taught"], len(current_user["teaching"]))
+        with stat_columns[1]:
+            st.metric(
+                text["stat_students_linked"],
+                len(users.students_linked_to_teacher(st.session_state.username)),
             )
-            with st.expander(expander_label):
-                for link in relevant_links:
-                    st.write(f"**{link['subject']} ({link['grade']})**")
-                    matching_chats = [
-                        c
-                        for c in relevant_chats
-                        if c["grade"] == link["grade"] and c["subject"] == link["subject"]
-                    ]
-                    if not matching_chats:
-                        st.caption(text["no_chats_message"])
-                    for student_chat in matching_chats:
-                        st.caption(f"Chat #{student_chat['id']}")
-                        for message in student_chat["history"]:
-                            if message["role"] == "system":
-                                continue
-                            with st.chat_message(message["role"]):
-                                st.write(message["content"])
-                                if message.get("created_at"):
-                                    st.caption(message["created_at"])
+        with stat_columns[2]:
+            st.metric(
+                text["stat_tests_saved"],
+                len(exams.list_tests_for_teacher(st.session_state.username)),
+            )
 
-    st.header(text["tests_header"])
-
-    if "test_chats_loaded" not in st.session_state:
-        st.session_state.test_chats_loaded = False
-    if not st.session_state.test_chats_loaded:
-        st.session_state.test_chats = chat_storage.load_chats(st.session_state.username)
-        st.session_state.active_test_chat_id = None
-        st.session_state.test_chats_loaded = True
-
-    try:
-        logos_available_models = chat.get_available_models()
-    except urllib.error.URLError:
-        if chat.is_ollama_installed():
-            st.error(text["ollama_unreachable"])
+    elif screen == "supervise":
+        st.header(text["your_students_header"])
+        linked_students = users.students_linked_to_teacher(st.session_state.username)
+        if not linked_students:
+            st.caption(text["no_students_message"])
         else:
-            st.error(text["ollama_not_installed"])
-        logos_available_models = None
+            for student_username in linked_students:
+                student_record = users.get_user(student_username)
+                relevant_links = [
+                    link
+                    for link in student_record["subject_links"]
+                    if link["teacher"] == st.session_state.username
+                ]
+                student_chats = chat_storage.load_chats(student_username)
+                relevant_chats = [
+                    c
+                    for c in student_chats
+                    if any(
+                        c["grade"] == link["grade"] and c["subject"] == link["subject"]
+                        for link in relevant_links
+                    )
+                ]
+                non_system_messages = [
+                    m for c in relevant_chats for m in c["history"] if m["role"] != "system"
+                ]
+                message_count = len(non_system_messages)
+                timestamps = [
+                    m["created_at"] for m in non_system_messages if m.get("created_at")
+                ]
+                last_active = max(timestamps) if timestamps else text["no_activity_yet"]
 
-    if logos_available_models:
-        logos_default_index = (
-            logos_available_models.index(config.CHAT_MODEL_NAME)
-            if config.CHAT_MODEL_NAME in logos_available_models
-            else 0
-        )
-        logos_selected_model = st.selectbox(
-            text["model_label"], logos_available_models, index=logos_default_index, key="logos_model"
-        )
+                expander_label = (
+                    f"{student_username} — {text['messages_count_label']}: {message_count} · "
+                    f"{text['last_active_label']}: {last_active}"
+                )
+                with st.expander(expander_label):
+                    for link in relevant_links:
+                        st.write(f"**{link['subject']} ({link['grade']})**")
+                        matching_chats = [
+                            c
+                            for c in relevant_chats
+                            if c["grade"] == link["grade"] and c["subject"] == link["subject"]
+                        ]
+                        if not matching_chats:
+                            st.caption(text["no_chats_message"])
+                        for student_chat in matching_chats:
+                            st.caption(f"Chat #{student_chat['id']}")
+                            for message in student_chat["history"]:
+                                if message["role"] == "system":
+                                    continue
+                                with st.chat_message(message["role"]):
+                                    st.write(message["content"])
+                                    if message.get("created_at"):
+                                        st.caption(message["created_at"])
 
-        st.subheader(text["logos_new_test_chat_header"])
+    elif screen == "my_classes":
+        st.header(text["add_teaching_header"])
+        add_grade = st.selectbox(
+            text["grade_label"], options=subjects.GRADES, key="add_teaching_grade"
+        )
+        add_subject = st.selectbox(
+            text["subject_label"],
+            options=subjects.GRADE_SUBJECTS[add_grade],
+            key="add_teaching_subject",
+        )
+        if st.button(text["add_teaching_button"]):
+            users.add_teaching_assignment(st.session_state.username, add_grade, add_subject)
+            st.rerun()
+
+        st.header(text["your_subjects_header"])
         if not current_user["teaching"]:
             st.caption(text["no_teaching_message"])
         else:
-            logos_teaching_labels = [
-                f"{a['subject']} ({a['grade']})" for a in current_user["teaching"]
-            ]
-            logos_chosen_label = st.selectbox(
-                text["subject_label"], options=logos_teaching_labels, key="logos_new_chat_subject"
-            )
-            logos_chosen_assignment = current_user["teaching"][
-                logos_teaching_labels.index(logos_chosen_label)
-            ]
+            for assignment in current_user["teaching"]:
+                st.write(f"- {assignment['subject']} ({assignment['grade']})")
 
-            if st.button(text["create_chat_button"], key="logos_create_chat"):
-                logos_system_prompt = prompts.build_logos_system_prompt(
-                    logos_chosen_assignment["grade"], logos_chosen_assignment["subject"], language
-                )
-                new_test_chat = chat_storage.create_chat(
-                    st.session_state.username,
-                    logos_chosen_assignment["grade"],
-                    logos_chosen_assignment["subject"],
-                    logos_system_prompt,
-                )
-                st.session_state.test_chats.append(new_test_chat)
-                st.session_state.active_test_chat_id = new_test_chat["id"]
+    else:  # screen == "tests"
+        if not st.session_state.test_chats_loaded:
+            st.session_state.test_chats = chat_storage.load_chats(st.session_state.username)
+            st.session_state.active_test_chat_id = None
+            st.session_state.test_chats_loaded = True
 
-        st.subheader(text["chats_header"])
-        if not st.session_state.test_chats:
-            st.caption(text["no_chats_message"])
-        else:
-            logos_chat_labels = [
-                f"{c['subject']} ({c['grade']})" for c in st.session_state.test_chats
-            ]
-            logos_chat_ids = [c["id"] for c in st.session_state.test_chats]
-            logos_current_index = (
-                logos_chat_ids.index(st.session_state.active_test_chat_id)
-                if st.session_state.active_test_chat_id in logos_chat_ids
+        try:
+            logos_available_models = chat.get_available_models()
+        except urllib.error.URLError:
+            if chat.is_ollama_installed():
+                st.error(text["ollama_unreachable"])
+            else:
+                st.error(text["ollama_not_installed"])
+            logos_available_models = None
+
+        if logos_available_models:
+            logos_default_index = (
+                logos_available_models.index(config.CHAT_MODEL_NAME)
+                if config.CHAT_MODEL_NAME in logos_available_models
                 else 0
             )
-            logos_chosen_chat_label = st.radio(
-                text["chats_header"],
-                logos_chat_labels,
-                index=logos_current_index,
-                key="logos_chat_picker",
-                label_visibility="collapsed",
+            logos_selected_model = st.selectbox(
+                text["model_label"],
+                logos_available_models,
+                index=logos_default_index,
+                key="logos_model",
             )
-            st.session_state.active_test_chat_id = logos_chat_ids[
-                logos_chat_labels.index(logos_chosen_chat_label)
-            ]
 
-        active_test_chat = next(
-            (c for c in st.session_state.test_chats if c["id"] == st.session_state.active_test_chat_id),
-            None,
-        )
-
-        if active_test_chat is None:
-            st.info(text["no_chats_message"])
-        else:
-            st.write(f"**{active_test_chat['subject']} ({active_test_chat['grade']})**")
-
-            for message in active_test_chat["history"]:
-                if message["role"] == "system":
-                    continue
-                with st.chat_message(message["role"]):
-                    st.write(message["content"])
-
-            teacher_message = st.chat_input(text["chat_placeholder"], key="logos_chat_input")
-
-            if teacher_message:
-                with st.chat_message("user"):
-                    st.write(teacher_message)
-
-                try:
-                    with st.spinner(text["thinking_spinner"]):
-                        logos_reply = chat.ask_logos(
-                            active_test_chat["history"], teacher_message, logos_selected_model
-                        )
-                except urllib.error.URLError:
-                    st.error(text["ollama_disconnected"])
-                    st.stop()
-
-                with st.chat_message("assistant"):
-                    st.write(logos_reply)
-
-                chat_storage.add_message(active_test_chat["id"], "user", teacher_message)
-                chat_storage.add_message(active_test_chat["id"], "assistant", logos_reply)
-
-            last_logos_messages = [
-                m for m in active_test_chat["history"] if m["role"] == "assistant"
-            ]
-            if last_logos_messages:
-                st.write(f"**{text['save_test_header']}**")
-                test_title = st.text_input(
-                    text["test_title_label"], key=f"test_title_{active_test_chat['id']}"
+            st.subheader(text["logos_new_test_chat_header"])
+            if not current_user["teaching"]:
+                st.caption(text["no_teaching_message"])
+            else:
+                logos_teaching_labels = [
+                    f"{a['subject']} ({a['grade']})" for a in current_user["teaching"]
+                ]
+                logos_chosen_label = st.selectbox(
+                    text["subject_label"],
+                    options=logos_teaching_labels,
+                    key="logos_new_chat_subject",
                 )
-                if st.button(text["save_test_button"], key=f"save_test_{active_test_chat['id']}"):
-                    if not test_title:
-                        st.error(text["signup_missing_fields_error"])
-                    else:
-                        exams.save_test(
-                            st.session_state.username,
-                            active_test_chat["grade"],
-                            active_test_chat["subject"],
-                            test_title,
-                            last_logos_messages[-1]["content"],
-                        )
-                        st.success(text["test_saved_message"])
+                logos_chosen_assignment = current_user["teaching"][
+                    logos_teaching_labels.index(logos_chosen_label)
+                ]
 
-    st.subheader(text["your_tests_header"])
-    saved_tests = exams.list_tests_for_teacher(st.session_state.username)
-    if not saved_tests:
-        st.caption(text["no_tests_message"])
-    else:
-        for saved_test in saved_tests:
-            with st.expander(f"{saved_test['title']} — {saved_test['subject']} ({saved_test['grade']})"):
-                st.write(saved_test["content"])
-                if st.button(text["delete_test_button"], key=f"delete_test_{saved_test['id']}"):
-                    exams.delete_test(saved_test["id"], st.session_state.username)
-                    st.rerun()
+                if st.button(text["create_chat_button"], key="logos_create_chat"):
+                    logos_system_prompt = prompts.build_logos_system_prompt(
+                        logos_chosen_assignment["grade"],
+                        logos_chosen_assignment["subject"],
+                        language,
+                    )
+                    new_test_chat = chat_storage.create_chat(
+                        st.session_state.username,
+                        logos_chosen_assignment["grade"],
+                        logos_chosen_assignment["subject"],
+                        logos_system_prompt,
+                    )
+                    st.session_state.test_chats.append(new_test_chat)
+                    st.session_state.active_test_chat_id = new_test_chat["id"]
+
+            st.subheader(text["chats_header"])
+            if not st.session_state.test_chats:
+                st.caption(text["no_chats_message"])
+            else:
+                logos_chat_labels = [
+                    f"{c['subject']} ({c['grade']})" for c in st.session_state.test_chats
+                ]
+                logos_chat_ids = [c["id"] for c in st.session_state.test_chats]
+                logos_current_index = (
+                    logos_chat_ids.index(st.session_state.active_test_chat_id)
+                    if st.session_state.active_test_chat_id in logos_chat_ids
+                    else 0
+                )
+                logos_chosen_chat_label = st.radio(
+                    text["chats_header"],
+                    logos_chat_labels,
+                    index=logos_current_index,
+                    key="logos_chat_picker",
+                    label_visibility="collapsed",
+                )
+                st.session_state.active_test_chat_id = logos_chat_ids[
+                    logos_chat_labels.index(logos_chosen_chat_label)
+                ]
+
+            active_test_chat = next(
+                (
+                    c
+                    for c in st.session_state.test_chats
+                    if c["id"] == st.session_state.active_test_chat_id
+                ),
+                None,
+            )
+
+            if active_test_chat is None:
+                st.info(text["no_chats_message"])
+            else:
+                st.write(f"**{active_test_chat['subject']} ({active_test_chat['grade']})**")
+
+                for message in active_test_chat["history"]:
+                    if message["role"] == "system":
+                        continue
+                    with st.chat_message(message["role"]):
+                        st.write(message["content"])
+
+                teacher_message = st.chat_input(text["chat_placeholder"], key="logos_chat_input")
+
+                if teacher_message:
+                    with st.chat_message("user"):
+                        st.write(teacher_message)
+
+                    try:
+                        with st.spinner(text["thinking_spinner"]):
+                            logos_reply = chat.ask_logos(
+                                active_test_chat["history"], teacher_message, logos_selected_model
+                            )
+                    except urllib.error.URLError:
+                        st.error(text["ollama_disconnected"])
+                        st.stop()
+
+                    with st.chat_message("assistant"):
+                        st.write(logos_reply)
+
+                    chat_storage.add_message(active_test_chat["id"], "user", teacher_message)
+                    chat_storage.add_message(active_test_chat["id"], "assistant", logos_reply)
+
+                last_logos_messages = [
+                    m for m in active_test_chat["history"] if m["role"] == "assistant"
+                ]
+                if last_logos_messages:
+                    st.write(f"**{text['save_test_header']}**")
+                    test_title = st.text_input(
+                        text["test_title_label"], key=f"test_title_{active_test_chat['id']}"
+                    )
+                    if st.button(
+                        text["save_test_button"], key=f"save_test_{active_test_chat['id']}"
+                    ):
+                        if not test_title:
+                            st.error(text["signup_missing_fields_error"])
+                        else:
+                            exams.save_test(
+                                st.session_state.username,
+                                active_test_chat["grade"],
+                                active_test_chat["subject"],
+                                test_title,
+                                last_logos_messages[-1]["content"],
+                            )
+                            st.success(text["test_saved_message"])
+
+        st.subheader(text["your_tests_header"])
+        saved_tests = exams.list_tests_for_teacher(st.session_state.username)
+        if not saved_tests:
+            st.caption(text["no_tests_message"])
+        else:
+            for saved_test in saved_tests:
+                with st.expander(
+                    f"{saved_test['title']} — {saved_test['subject']} ({saved_test['grade']})"
+                ):
+                    st.write(saved_test["content"])
+                    if st.button(text["delete_test_button"], key=f"delete_test_{saved_test['id']}"):
+                        exams.delete_test(saved_test["id"], st.session_state.username)
+                        st.rerun()
 
 else:  # role == "student"
     if not st.session_state.chats_loaded:
@@ -561,7 +660,18 @@ else:  # role == "student"
         st.session_state.active_chat_id = None
         st.session_state.chats_loaded = True
 
-    with st.sidebar:
+    if screen == "main_menu":
+        st.write(text["welcome_message"].format(username=st.session_state.username))
+        st.write(f"{text['grade_label']}: {current_user['grade']}")
+        st.write(f"{text['homeroom_label']}: {current_user['homeroom_name'] or '—'}")
+
+        stat_columns = st.columns(2)
+        with stat_columns[0]:
+            st.metric(text["stat_linked_classes"], len(current_user["subject_links"]))
+        with stat_columns[1]:
+            st.metric(text["stat_chats_started"], len(st.session_state.chats))
+
+    elif screen == "link_teacher":
         st.header(text["link_teacher_header"])
         link_method = st.radio(
             text["link_method_label"],
@@ -638,6 +748,23 @@ else:  # role == "student"
                             st.success(text["link_success"])
                             st.rerun()
 
+    elif screen == "material":
+        st.header(text["material_header"])
+        uploaded_pdf = st.file_uploader(text["upload_label"], type="pdf")
+
+        if uploaded_pdf is not None and st.button(text["upload_button"]):
+            os.makedirs(config.DOCUMENTS_DIR, exist_ok=True)
+            pdf_path = os.path.join(config.DOCUMENTS_DIR, uploaded_pdf.name)
+
+            with open(pdf_path, "wb") as pdf_file:
+                pdf_file.write(uploaded_pdf.getbuffer())
+
+            with st.spinner(text["upload_spinner"]):
+                num_chunks_added = rag.add_pdf_to_vector_store(pdf_path)
+
+            st.success(text["upload_success"].format(num_chunks=num_chunks_added))
+
+    else:  # screen == "chat"
         st.header(text["new_chat_header"])
         subject_links = current_user["subject_links"]
         if not subject_links:
@@ -682,8 +809,6 @@ else:  # role == "student"
             )
             st.session_state.active_chat_id = chat_ids[chat_labels.index(chosen_chat_label)]
 
-        st.header(text["connection_header"])
-
         try:
             available_models = chat.get_available_models()
         except urllib.error.URLError:
@@ -698,58 +823,41 @@ else:  # role == "student"
             if config.CHAT_MODEL_NAME in available_models
             else 0
         )
-        selected_model = st.selectbox(
-            text["model_label"], available_models, index=default_index
+        selected_model = st.selectbox(text["model_label"], available_models, index=default_index)
+
+        active_chat = next(
+            (c for c in st.session_state.chats if c["id"] == st.session_state.active_chat_id),
+            None,
         )
 
-        st.header(text["material_header"])
-        uploaded_pdf = st.file_uploader(text["upload_label"], type="pdf")
+        if active_chat is None:
+            st.info(text["no_chats_message"])
+        else:
+            st.subheader(f"{active_chat['subject']} ({active_chat['grade']})")
 
-        if uploaded_pdf is not None and st.button(text["upload_button"]):
-            os.makedirs(config.DOCUMENTS_DIR, exist_ok=True)
-            pdf_path = os.path.join(config.DOCUMENTS_DIR, uploaded_pdf.name)
+            for message in active_chat["history"]:
+                if message["role"] == "system":
+                    continue
+                with st.chat_message(message["role"]):
+                    st.write(message["content"])
 
-            with open(pdf_path, "wb") as pdf_file:
-                pdf_file.write(uploaded_pdf.getbuffer())
+            student_message = st.chat_input(text["chat_placeholder"])
 
-            with st.spinner(text["upload_spinner"]):
-                num_chunks_added = rag.add_pdf_to_vector_store(pdf_path)
+            if student_message:
+                with st.chat_message("user"):
+                    st.write(student_message)
 
-            st.success(text["upload_success"].format(num_chunks=num_chunks_added))
+                try:
+                    with st.spinner(text["thinking_spinner"]):
+                        tutor_reply = chat.ask_tutor(
+                            active_chat["history"], student_message, selected_model
+                        )
+                except urllib.error.URLError:
+                    st.error(text["ollama_disconnected"])
+                    st.stop()
 
-    active_chat = next(
-        (c for c in st.session_state.chats if c["id"] == st.session_state.active_chat_id),
-        None,
-    )
+                with st.chat_message("assistant"):
+                    st.write(tutor_reply)
 
-    if active_chat is None:
-        st.info(text["no_chats_message"])
-    else:
-        st.subheader(f"{active_chat['subject']} ({active_chat['grade']})")
-
-        for message in active_chat["history"]:
-            if message["role"] == "system":
-                continue
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-
-        student_message = st.chat_input(text["chat_placeholder"])
-
-        if student_message:
-            with st.chat_message("user"):
-                st.write(student_message)
-
-            try:
-                with st.spinner(text["thinking_spinner"]):
-                    tutor_reply = chat.ask_tutor(
-                        active_chat["history"], student_message, selected_model
-                    )
-            except urllib.error.URLError:
-                st.error(text["ollama_disconnected"])
-                st.stop()
-
-            with st.chat_message("assistant"):
-                st.write(tutor_reply)
-
-            chat_storage.add_message(active_chat["id"], "user", student_message)
-            chat_storage.add_message(active_chat["id"], "assistant", tutor_reply)
+                chat_storage.add_message(active_chat["id"], "user", student_message)
+                chat_storage.add_message(active_chat["id"], "assistant", tutor_reply)

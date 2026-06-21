@@ -112,28 +112,33 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   project's pytest suite (`tests/`, no `__init__.py`, just a sibling
   directory -- not an actual import collision, but a human-confusion one).
 - `app.py` — login/signup gate (role choice: student or teacher; no admin
-  signup path), then branches by role:
-  - **student**: sidebar has "link a teacher" (search by subject+grade,
-    or enter a join code), "create chat" (only for grade+subject combos
-    they're linked to), the chat list/switcher, model picker, PDF
-    uploader. Each message is saved immediately via `chat_storage`.
-  - **teacher**: shows their join code, a form to add more
-    `(grade, subject)` teaching assignments, a read-only view of every
-    linked student's chats for subjects/grades they teach, and a "Tests"
-    section: pick one of their own teaching assignments, create a chat
-    with Logos (`prompts.build_logos_system_prompt` /
-    `chat.ask_logos`, no RAG), then "Save as test" persists the latest
-    Logos reply via `exams.save_test`. Saved tests are listed below with
-    a delete button each.
-  - **admin**: can add a student or teacher account, then has two
-    separate, independently filterable menus (not one combined list):
-    a **Teachers** menu (filter by grade, search by username) and a
-    **Students** menu (filter by grade, filter by class, search by
-    username — both filters apply together with AND logic). Each entry
-    shows a teacher's full teaching list with a live student count per
-    class, or a student's grade/homeroom/full link list (with per-link
-    remove buttons and an admin-initiated link form), plus shared
-    password-change and delete-with-confirm controls
+  signup path). Once logged in, the sidebar (below the logged-in-as/logout
+  controls) has a `st.radio` screen picker, `SCREENS_BY_ROLE`, so each
+  role's dashboard is several sidebar-navigable screens instead of one
+  long scrolling page. The persona name (`config.ASSISTANT_NAMES[role]`)
+  is always the page title regardless of which screen is active.
+  - **student** (Socrates): *Main menu* (welcome, grade, homeroom,
+    linked-classes/chats-started stats), *Chat* (create/switch chats for
+    grade+subject combos they're linked to, model picker, the
+    conversation itself — each message saved immediately via
+    `chat_storage`), *Link teacher* (search by username or join code),
+    *Material* (PDF upload for RAG).
+  - **teacher** (Logos): *Main menu* (welcome, join code, classes-taught/
+    students-linked/tests-saved stats), *Supervise students* (read-only
+    view of every linked student's chats, with message-count and
+    last-active per student), *My classes* (add/list `(grade, subject)`
+    teaching assignments), *Tests* (chat with Logos —
+    `prompts.build_logos_system_prompt` / `chat.ask_logos`, no RAG —
+    then "Save as test" persists the latest reply via
+    `exams.save_test`; saved tests listed below with delete buttons).
+  - **admin** (Artemis): *Main menu* (total students/teachers/classes/
+    homerooms stats), *Add user* (student or teacher), *Teachers* menu
+    (filter by grade, search by username), *Students* menu (filter by
+    grade, filter by class, search by username — filters apply together
+    with AND logic). Teacher/student entries show full teaching/link
+    lists (with per-link remove buttons and an admin-initiated link
+    form), the actual password (see the security note below), plus
+    shared password-change and delete-with-confirm controls
     (`render_change_password_and_delete`, used by both menus). Deleting
     a user cascades: their chats+messages, teaching assignments, classes
     they teach, and subject_links in either direction all get cleaned
@@ -159,6 +164,15 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   is tested with a mocked `urlopen`; `ask_tutor` (which also hits RAG) is
   not.
 - Run with: `pip install -r requirements-dev.txt && pytest`.
+- `app.py` itself has no pytest coverage (it's all Streamlit calls, not
+  pure functions) — when restructuring its screens, it was instead
+  smoke-tested with `streamlit.testing.v1.AppTest`: log in as each role
+  by setting `at.session_state["username"]` directly (clicking through
+  the actual login form tripped an AppTest harness quirk unrelated to
+  the app itself — a stale-widget-ID `KeyError` after any rerun that
+  follows submitting a `type="password"` field), then `nav_radio.set_value(...).run()`
+  through every screen option, asserting `at.exception` is empty. Always
+  run this against a `/tmp` copy of `data/tutorai.db`, never the real one.
 
 ## Setup already done on this machine
 
