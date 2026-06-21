@@ -2,14 +2,16 @@
 (see db.py).
 
 Three account types:
-- "student": has a home grade, a class (one per grade, see classes.py),
-  and a list of subject links, each one pointing at the teacher who gave
-  them access to that grade+subject. A student's subject links can only
+- "student": has a home grade, a homeroom (see homerooms.py), and a list
+  of subject links, each one pointing at the teacher who gave them
+  access to that grade+subject -- this is also what classes.py uses to
+  know which classes a student is in. A student's subject links can only
   be for their own grade or the grade immediately below it -- this is
   what lets a student retake a subject at a lower grade without letting
   their subjects span the whole curriculum.
-- "teacher": has a list of (grade, subject) pairs they teach, and a join
-  code students can use to link to them instead of searching.
+- "teacher": has a list of (grade, subject) pairs they teach (each one
+  is also a class, see classes.py), and a join code students can use to
+  link to them instead of searching.
 - "admin": a single account, pre-seeded by create_admin.py. There is no
   signup path for admin accounts in the app itself.
 
@@ -22,7 +24,7 @@ import secrets
 import string
 from typing import Optional
 
-from tutorai import classes, db, subjects
+from tutorai import classes, db, homerooms, subjects
 
 PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6
@@ -69,13 +71,13 @@ def get_user(username: str) -> Optional[dict]:
             return None
 
         user = dict(user_row)
-        if user["class_id"] is not None:
-            class_row = connection.execute(
-                "SELECT name FROM classes WHERE id = ?", (user["class_id"],)
+        if user["homeroom_id"] is not None:
+            homeroom_row = connection.execute(
+                "SELECT name FROM homerooms WHERE id = ?", (user["homeroom_id"],)
             ).fetchone()
-            user["class_name"] = class_row["name"] if class_row else None
+            user["homeroom_name"] = homeroom_row["name"] if homeroom_row else None
         else:
-            user["class_name"] = None
+            user["homeroom_name"] = None
 
         user["teaching"] = [
             dict(row)
@@ -108,10 +110,8 @@ def verify_login(username: str, password: str) -> bool:
 
 
 def create_student(username: str, password: str, grade: str) -> None:
-    """Add a new student account, automatically placed in their grade's
-    class. Raises ValueError if the username is already taken."""
-    class_id = classes.get_class_for_grade(grade)["id"]
-
+    """Add a new student account, automatically placed in a homeroom for
+    their grade. Raises ValueError if the username is already taken."""
     connection = db.get_connection()
     try:
         if connection.execute(
@@ -119,11 +119,12 @@ def create_student(username: str, password: str, grade: str) -> None:
         ).fetchone():
             raise ValueError("Username already exists")
 
+        homeroom_id = homerooms.assign_homeroom(grade)["id"]
         salt = secrets.token_hex(16)
         connection.execute(
-            "INSERT INTO users (username, role, salt, password_hash, grade, class_id) "
+            "INSERT INTO users (username, role, salt, password_hash, grade, homeroom_id) "
             "VALUES (?, 'student', ?, ?, ?, ?)",
-            (username, salt, _hash_password(password, salt), grade, class_id),
+            (username, salt, _hash_password(password, salt), grade, homeroom_id),
         )
         connection.commit()
     finally:
@@ -180,7 +181,8 @@ def create_admin(username: str, password: str) -> None:
 
 
 def add_teaching_assignment(teacher_username: str, grade: str, subject: str) -> None:
-    """Add a (grade, subject) pair to a teacher's teaching list."""
+    """Add a (grade, subject) pair to a teacher's teaching list, creating
+    the matching class (see classes.py) if it doesn't exist yet."""
     connection = db.get_connection()
     try:
         connection.execute(
@@ -191,6 +193,8 @@ def add_teaching_assignment(teacher_username: str, grade: str, subject: str) -> 
         connection.commit()
     finally:
         connection.close()
+
+    classes.get_or_create_class(teacher_username, grade, subject)
 
 
 def find_teachers(search_text: str = "") -> list[str]:
@@ -304,17 +308,21 @@ def students_linked_to_teacher(teacher_username: str) -> list[str]:
         connection.close()
 
 
-def list_all_users(search_text: str = "") -> list[dict]:
+def list_all_users(search_text: str = "", role: str = None) -> list[dict]:
     """Return every user's basic info (no password data) in alphabetical
-    order, optionally filtered by a search term. For the admin
-    dashboard."""
+    order, optionally filtered by a search term and/or role. For the
+    admin dashboard."""
     connection = db.get_connection()
     try:
-        rows = connection.execute(
-            "SELECT username, role, grade, join_code FROM users WHERE username LIKE ? "
-            "ORDER BY username COLLATE NOCASE",
-            (f"%{search_text}%",),
+        query = (
+            "SELECT username, role, grade, join_code FROM users WHERE username LIKE ?"
         )
+        params = [f"%{search_text}%"]
+        if role:
+            query += " AND role = ?"
+            params.append(role)
+        query += " ORDER BY username COLLATE NOCASE"
+        rows = connection.execute(query, params)
         return [dict(row) for row in rows]
     finally:
         connection.close()
@@ -365,8 +373,8 @@ def regenerate_join_code(teacher_username: str) -> str:
 
 def delete_user(username: str) -> None:
     """Delete a user account and everything that references it (their
-    chats, teaching assignments, and subject links in either direction).
-    Raises ValueError if the username is unknown.
+    chats, teaching assignments, classes, and subject links in either
+    direction). Raises ValueError if the username is unknown.
 
     Used by the admin dashboard. There's no role branching here: each
     DELETE only matches rows that actually exist for this user's role, so
@@ -397,6 +405,7 @@ def delete_user(username: str) -> None:
         connection.execute(
             "DELETE FROM teaching_assignments WHERE teacher_username = ?", (username,)
         )
+        connection.execute("DELETE FROM classes WHERE teacher_username = ?", (username,))
         connection.execute("DELETE FROM tests WHERE teacher_username = ?", (username,))
         connection.execute("DELETE FROM users WHERE username = ?", (username,))
         connection.commit()

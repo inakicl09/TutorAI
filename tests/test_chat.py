@@ -22,6 +22,14 @@ class FakeResponse:
         return False
 
 
+def test_is_ollama_installed_reflects_whether_the_command_is_found():
+    with patch("shutil.which", return_value="/usr/local/bin/ollama"):
+        assert chat.is_ollama_installed() is True
+
+    with patch("shutil.which", return_value=None):
+        assert chat.is_ollama_installed() is False
+
+
 def test_get_available_models_filters_out_the_embedding_model():
     fake_body = {
         "models": [

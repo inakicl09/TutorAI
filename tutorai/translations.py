@@ -59,8 +59,14 @@ TEXT = {
         "remove_link_button": "Quitar",
         "add_link_header": "Vincular a un profesor",
         "link_removed_message": "Vínculo eliminado.",
-        "students_by_class_header": "Alumnos por clase y curso",
-        "no_students_in_class_message": "No hay alumnos en esta clase todavía.",
+        "admin_teachers_menu_header": "Profesores",
+        "admin_students_menu_header": "Alumnos",
+        "filter_by_grade_label": "Filtrar por curso",
+        "filter_by_class_label": "Filtrar por clase",
+        "all_grades_option": "Todos",
+        "all_classes_option": "Todas",
+        "homeroom_label": "Grupo",
+        "no_matching_users_message": "No se encontraron usuarios.",
         "link_teacher_header": "Vincula un profesor",
         "link_method_label": "Cómo quieres vincularte",
         "link_method_search": "Buscar profesor",
@@ -71,6 +77,7 @@ TEXT = {
         "link_button": "Vincular",
         "join_code_input_label": "Código del profesor",
         "join_code_invalid_error": "Código no válido.",
+        "link_failed_error": "No se pudo vincular: ese curso no es válido para este alumno.",
         "link_success": "¡Vinculado correctamente!",
         "your_links_header": "Tus asignaturas vinculadas",
         "no_links_message": "Vincula un profesor para poder crear chats.",
@@ -101,6 +108,11 @@ TEXT = {
             "No se pudo conectar con Ollama. Ejecuta 'ollama serve' y "
             "vuelve a cargar esta página."
         ),
+        "ollama_not_installed": (
+            "No se encontró Ollama en este ordenador. Descárgalo desde "
+            "https://ollama.com/download, instálalo y luego ejecuta "
+            "'ollama serve' antes de volver a cargar esta página."
+        ),
         "ollama_disconnected": "Se perdió la conexión con Ollama. Comprueba que sigue en marcha.",
         "cli_title": "=== TutorAI: Tutor Socrático ===",
         "cli_choose_subject": "Elige una asignatura:",
@@ -114,6 +126,11 @@ TEXT = {
         "cli_ollama_unreachable": (
             "No se pudo conectar con Ollama. Ejecuta 'ollama serve' y "
             "vuelve a intentarlo."
+        ),
+        "cli_ollama_not_installed": (
+            "No se encontró Ollama en este ordenador. Descárgalo desde "
+            "https://ollama.com/download, instálalo y luego ejecuta "
+            "'ollama serve' antes de volver a intentarlo."
         ),
         "cli_ollama_disconnected": "Tutor: No puedo conectar con Ollama. ¿Está en marcha? Prueba 'ollama serve'.",
     },
@@ -173,8 +190,14 @@ TEXT = {
         "remove_link_button": "Remove",
         "add_link_header": "Link to a teacher",
         "link_removed_message": "Link removed.",
-        "students_by_class_header": "Students by class and grade",
-        "no_students_in_class_message": "No students in this class yet.",
+        "admin_teachers_menu_header": "Teachers",
+        "admin_students_menu_header": "Students",
+        "filter_by_grade_label": "Filter by grade",
+        "filter_by_class_label": "Filter by class",
+        "all_grades_option": "All",
+        "all_classes_option": "All",
+        "homeroom_label": "Homeroom",
+        "no_matching_users_message": "No matching users.",
         "link_teacher_header": "Link a teacher",
         "link_method_label": "How do you want to link",
         "link_method_search": "Search for a teacher",
@@ -185,6 +208,7 @@ TEXT = {
         "link_button": "Link",
         "join_code_input_label": "Teacher's code",
         "join_code_invalid_error": "Invalid code.",
+        "link_failed_error": "Could not link: that grade isn't valid for this student.",
         "link_success": "Linked successfully!",
         "your_links_header": "Your linked subjects",
         "no_links_message": "Link a teacher to be able to create chats.",
@@ -212,6 +236,11 @@ TEXT = {
         "chat_placeholder": "Type your question...",
         "thinking_spinner": "Thinking...",
         "ollama_unreachable": "Could not connect to Ollama. Run 'ollama serve' and reload this page.",
+        "ollama_not_installed": (
+            "Ollama wasn't found on this computer. Download it from "
+            "https://ollama.com/download, install it, then run "
+            "'ollama serve' and reload this page."
+        ),
         "ollama_disconnected": "Lost connection to Ollama. Check that it's still running.",
         "cli_title": "=== TutorAI: Socratic Tutor ===",
         "cli_choose_subject": "Choose a subject:",
@@ -223,6 +252,11 @@ TEXT = {
         "cli_tutor_label": "Tutor:",
         "cli_goodbye": "Tutor: Goodbye! Keep questioning everything.",
         "cli_ollama_unreachable": "Could not connect to Ollama. Run 'ollama serve' and try again.",
+        "cli_ollama_not_installed": (
+            "Ollama wasn't found on this computer. Download it from "
+            "https://ollama.com/download, install it, then run "
+            "'ollama serve' and try again."
+        ),
         "cli_ollama_disconnected": "Tutor: I can't reach Ollama. Is it running? Try 'ollama serve'.",
     },
 }

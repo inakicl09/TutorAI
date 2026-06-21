@@ -9,12 +9,20 @@ teacher/admin accounts are told to use the web app instead.
 """
 
 import json
+import shutil
 import urllib.error
 import urllib.request
 
-from tutorai import chat_storage, classes, config, db, prompts, subjects, translations, users
+from tutorai import chat_storage, classes, config, db, homerooms, prompts, subjects, translations, users
 
 QUIT_WORDS = {"quit", "exit", "salir"}
+
+
+def is_ollama_installed() -> bool:
+    """Check whether the `ollama` command exists on this machine, so we
+    can tell a "not installed" error apart from "installed but not
+    running right now"."""
+    return shutil.which("ollama") is not None
 
 
 def get_available_models() -> list[str]:
@@ -187,7 +195,8 @@ def ask_ollama(conversation_history: list[dict], model_name: str) -> str:
 
 def main() -> None:
     db.init_db()
-    classes.ensure_default_classes()
+    classes.sync_with_teaching_assignments()
+    homerooms.backfill_homerooms()
 
     language = choose_language()
     text = translations.TEXT[language]
@@ -206,7 +215,10 @@ def main() -> None:
     try:
         available_models = get_available_models()
     except urllib.error.URLError:
-        print(text["cli_ollama_unreachable"])
+        if is_ollama_installed():
+            print(text["cli_ollama_unreachable"])
+        else:
+            print(text["cli_ollama_not_installed"])
         return
 
     chosen_link = choose_subject_link(text, username)

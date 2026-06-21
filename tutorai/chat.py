@@ -3,9 +3,17 @@ material, and the Ollama model to produce the tutor's replies.
 """
 
 import json
+import shutil
 import urllib.request
 
 from tutorai import config, prompts, rag
+
+
+def is_ollama_installed() -> bool:
+    """Check whether the `ollama` command exists on this machine, so we
+    can tell a "not installed" error apart from "installed but not
+    running right now"."""
+    return shutil.which("ollama") is not None
 
 
 def get_available_models() -> list[str]:

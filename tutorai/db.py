@@ -1,5 +1,11 @@
 """Single SQLite database for TutorAI: users, chats, and (eventually)
 tests. Centralized here so every module talks to the same schema.
+
+Two distinct "class" concepts live here, on purpose:
+- `classes`: a teacher's group for one grade+subject (e.g. "Matemáticas
+  3º ESO with profesor_lopez"). See classes.py.
+- `homerooms`: a grade-level administrative group capped at a maximum
+  size (e.g. "3º ESO - A", "3º ESO - B"). See homerooms.py.
 """
 
 import os
@@ -22,6 +28,23 @@ def init_db() -> None:
     the app starts."""
     connection = get_connection()
     try:
+        # Migration: "classes" used to mean "one homeroom per grade"
+        # (id, name, grade). That's now called "homerooms" -- the table
+        # is simply renamed, since its old shape matches exactly what
+        # homerooms need. The new "classes" table means something
+        # different (a teacher's grade+subject group) and gets created
+        # fresh below.
+        existing_tables = {
+            row["name"]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        if "classes" in existing_tables and "homerooms" not in existing_tables:
+            existing_class_columns = [
+                row["name"] for row in connection.execute("PRAGMA table_info(classes)")
+            ]
+            if "teacher_username" not in existing_class_columns:
+                connection.execute("ALTER TABLE classes RENAME TO homerooms")
+
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -31,16 +54,30 @@ def init_db() -> None:
                 password_hash TEXT NOT NULL,
                 grade TEXT,
                 join_code TEXT UNIQUE,
-                class_id INTEGER REFERENCES classes(id)
+                homeroom_id INTEGER REFERENCES homerooms(id)
             );
 
-            -- One classroom group per grade (e.g. "1º ESO - A"). Only one
-            -- class per grade exists for now, but it's a real table so
-            -- more can be added later without changing the data model.
-            CREATE TABLE IF NOT EXISTS classes (
+            -- A grade-level administrative group, capped at a maximum
+            -- size (homerooms.MAX_STUDENTS_PER_HOMEROOM). Every student
+            -- belongs to exactly one.
+            CREATE TABLE IF NOT EXISTS homerooms (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 grade TEXT NOT NULL
+            );
+
+            -- A teacher's group for one grade+subject. A student is "in"
+            -- a class once linked to that teacher for that subject (see
+            -- users.link_student_to_teacher) -- there's no separate
+            -- enrollment table, since subject_links already describes
+            -- the same relationship.
+            CREATE TABLE IF NOT EXISTS classes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                teacher_username TEXT NOT NULL REFERENCES users(username),
+                grade TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                UNIQUE (teacher_username, grade, subject)
             );
 
             CREATE TABLE IF NOT EXISTS teaching_assignments (
@@ -94,13 +131,19 @@ def init_db() -> None:
         if "created_at" not in existing_chat_message_columns:
             connection.execute("ALTER TABLE chat_messages ADD COLUMN created_at TEXT")
 
-        # Migration: older databases were created before users had a
-        # class_id column (and before the classes table existed).
+        # Migration: older databases had users.class_id (the old homeroom
+        # link) instead of users.homeroom_id. Copy the values across;
+        # class_id itself is left in place, unused, rather than risk an
+        # unsupported DROP COLUMN on an older SQLite.
         existing_user_columns = [
             row["name"] for row in connection.execute("PRAGMA table_info(users)")
         ]
-        if "class_id" not in existing_user_columns:
-            connection.execute("ALTER TABLE users ADD COLUMN class_id INTEGER REFERENCES classes(id)")
+        if "homeroom_id" not in existing_user_columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN homeroom_id INTEGER REFERENCES homerooms(id)"
+            )
+            if "class_id" in existing_user_columns:
+                connection.execute("UPDATE users SET homeroom_id = class_id")
 
         connection.commit()
     finally:

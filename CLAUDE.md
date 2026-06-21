@@ -27,22 +27,37 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `config.py` — Ollama URLs, model names, file paths, RAG chunk settings,
   the SQLite `DB_PATH`.
 - `db.py` — single SQLite database (`data/tutorai.db`, gitignored).
-  Tables: `users`, `classes`, `teaching_assignments`, `subject_links`,
-  `chats`, `chat_messages`, and a `tests` table that exists but is unused
-  (see "Not yet built"). `init_db()` is safe to call every startup.
-- `classes.py` — one classroom group per grade (e.g. "1º ESO - A"), only
-  one class per grade for now. `ensure_default_classes()` creates the six
-  classes if missing and backfills `class_id` for any student who
-  predates this feature; called right after `db.init_db()` in every
-  entry point (`app.py`, `tutor.py`, `create_admin.py`,
-  `seed_test_data.py`, and the test fixture).
+  Tables: `users`, `homerooms`, `classes`, `teaching_assignments`,
+  `subject_links`, `chats`, `chat_messages`, and a `tests` table that
+  exists but is unused (see "Not yet built"). `init_db()` is safe to call
+  every startup, and migrates older databases (adds `created_at` to
+  `chat_messages`; renames the old grade-only `classes` table to
+  `homerooms` and creates the new `classes` table; adds
+  `users.homeroom_id` and copies it from the old `class_id`, which is
+  left in place unused rather than risking an unsupported DROP COLUMN).
+- Two distinct "class" concepts, on purpose (the first design only had
+  the second one, then got corrected mid-build):
+  - `classes.py` — a class is one teacher's group for one grade+subject
+    (e.g. "Matemáticas - 3º ESO" taught by profesor_lopez). A student is
+    "in" a class once linked to that teacher for that grade+subject —
+    there's no separate enrollment table, since `subject_links` already
+    describes that relationship. `get_or_create_class` is called from
+    `users.add_teaching_assignment`; `sync_with_teaching_assignments()`
+    backfills classes for assignments that predate this table, called
+    right after `db.init_db()` in every entry point.
+  - `homerooms.py` — a homeroom is a grade-level administrative group
+    capped at `MAX_STUDENTS_PER_HOMEROOM` (30), e.g. "1º ESO - A" then
+    "1º ESO - B" once "A" is full. Unrelated to subjects/teachers. Every
+    student belongs to exactly one, assigned by `assign_homeroom` inside
+    `users.create_student`. `backfill_homerooms()` places any student
+    missing one, called right after `db.init_db()` in every entry point.
 - `users.py` — signup/login plus the role system, all on top of `db.py`:
-  - `create_student(username, password, grade)` (auto-assigned to that
-    grade's class) / `create_teacher(...)` (returns a join code) /
+  - `create_student(username, password, grade)` (auto-assigned to a
+    homeroom) / `create_teacher(...)` (returns a join code) /
     `create_admin(...)` (used only by `create_admin.py`, not exposed in
     any signup form).
   - Teachers declare `(grade, subject)` pairs they teach via
-    `add_teaching_assignment`.
+    `add_teaching_assignment` (also creates the matching class).
   - Students get access to a `(grade, subject)` only through
     `link_student_to_teacher`, which checks both that the teacher
     actually teaches it AND that the grade is the student's own grade or
@@ -52,8 +67,8 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     has a `fix_invalid_subject_links()` cleanup pass for links created
     before this rule existed.
   - `find_teachers` (search by username, alphabetical), `list_all_users`
-    (search by username, alphabetical, no password data),
-    `find_teacher_by_join_code` (the other linking path), and
+    (search by username, alphabetical, optional role filter, no password
+    data), `find_teacher_by_join_code` (the other linking path), and
     `unlink_student_from_teacher` (the inverse of linking).
   - Passwords are hashed with `hashlib.pbkdf2_hmac` + a random per-user
     salt (`secrets.token_hex`), both stdlib — never stored in plain text.
@@ -75,7 +90,12 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   Ollama) and retrieval, persisted in chromaDB at `data/chroma_db`.
 - `chat.py` — calls Ollama's `/api/chat`, combines retrieved chunks into
   the prompt context, lists available models via `/api/tags` (filtering
-  out the embedding-only model since it can't chat).
+  out the embedding-only model since it can't chat). `is_ollama_installed()`
+  uses `shutil.which("ollama")` to tell "not installed" apart from
+  "installed but not running" when the connection fails, so the error
+  message can point to https://ollama.com/download specifically when
+  needed. `tutor.py` duplicates this one check (not the rest of chat.py)
+  to stay independent of `rag.py`'s heavier imports.
 - `chat_storage.py` — `create_chat(...)` inserts a chat + its system
   message, `add_message(chat_id, role, content)` appends one message,
   `load_chats(username)` rebuilds full history per chat. All SQLite, all
@@ -90,17 +110,19 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     `(grade, subject)` teaching assignments, and a read-only view of
     every linked student's chats for subjects/grades they teach. Has a
     "Tests" section that's just a "coming soon" placeholder.
-  - **admin**: can add a student or teacher account, browse students
-    grouped by class+grade (`classes.list_classes` /
-    `classes.students_in_class`), search/list every user alphabetically,
-    view a teacher's full teaching list or a student's full link list
-    (with per-link remove buttons and an admin-initiated link form),
-    change anyone's password (the password-recovery mechanism, since
-    there's no self-service flow), regenerate a teacher's join code, and
-    delete a user (with a confirm/cancel step first). Deleting a user
-    cascades: their chats+messages, teaching assignments, and
-    subject_links in either direction all get cleaned up
-    (`users.delete_user`). Can't delete your own logged-in account.
+  - **admin**: can add a student or teacher account, then has two
+    separate, independently filterable menus (not one combined list):
+    a **Teachers** menu (filter by grade, search by username) and a
+    **Students** menu (filter by grade, filter by class, search by
+    username — both filters apply together with AND logic). Each entry
+    shows a teacher's full teaching list with a live student count per
+    class, or a student's grade/homeroom/full link list (with per-link
+    remove buttons and an admin-initiated link form), plus shared
+    password-change and delete-with-confirm controls
+    (`render_change_password_and_delete`, used by both menus). Deleting
+    a user cascades: their chats+messages, teaching assignments, classes
+    they teach, and subject_links in either direction all get cleaned
+    up (`users.delete_user`). Can't delete your own logged-in account.
     Admin accounts themselves still can't be created from the UI — only
     via `create_admin.py`, per the "limited to myself" requirement.
 - `run.sh` — creates `.venv` and installs `requirements.txt` on first run,
@@ -163,10 +185,26 @@ confirming `./run.sh` still starts cleanly.
   grade below (`users.allowed_link_grades`) — added after the user
   noticed seeded students had subjects spanning very distant grades,
   which didn't reflect a realistic "retaking one subject" scenario.
-- Classes are modeled as a real table (one per grade for now) rather
-  than just grouping by the existing `grade` column, since the user
-  asked for "classes" as their own concept — anticipating multiple
-  classes per grade later without a data model change.
+- Classes were first modeled as one homeroom per grade (a pure grouping,
+  unrelated to subjects/teachers). The user then asked to "connect each
+  student to various classes" with "teachers teaching 3-5 classes each,"
+  which doesn't fit a one-per-grade model — clarified via question, then
+  split into two concepts: `classes.py` (teacher+grade+subject, what
+  students connect to several of) and `homerooms.py` (the original
+  grade-homeroom idea, kept as a *separate* concept per the user's
+  follow-up: "there is also one common homeroom per a certain amount of
+  students per grade"). The old `classes` table's data wasn't thrown
+  away — `db.py`'s migration renames it straight into `homerooms` since
+  the shape matched exactly.
+- Teachers teach 3-5 classes, students connect to 2-4 (`seed_test_data.py`
+  has one-off top-up passes — `top_up_teacher_assignments` /
+  `top_up_student_links` — so accounts seeded under the old, lower
+  ranges still end up in the new ones after a re-run).
+- Ollama errors now distinguish "not installed" from "installed but not
+  running," pointing to https://ollama.com/download only in the former
+  case (`chat.is_ollama_installed()` / `tutor.is_ollama_installed()`),
+  since a student with no Ollama at all needs different instructions
+  than one who just hasn't run `ollama serve` yet.
 - Moved all modules from flat root-level files into a `tutorai/` package
   plus a `tests/` directory with `pytest` coverage (user's explicit
   choice, 2026-06-20, overriding `AGENTS.md`'s earlier "keep it flat, no
@@ -188,7 +226,8 @@ during the SQLite migration since no real user data existed yet.
   "coming soon" message. A `tests` table already exists in `db.py` for
   when this gets built.
 - Per-chat model selection (currently one global model for all chats).
-- Deleting/renaming chats, unlinking a student from a teacher.
+- Deleting/renaming chats. (Unlinking a student from a teacher is now
+  built — admin's Students menu has a remove button per link.)
 - Self-service password reset still doesn't exist, but admin can now
   reset any user's password from the dashboard as a workaround.
 - Admin can't change a user's role (e.g. promote student to teacher) or

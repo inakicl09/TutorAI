@@ -15,10 +15,23 @@ import urllib.error
 
 import streamlit as st
 
-from tutorai import chat, chat_storage, classes, config, db, prompts, rag, subjects, translations, users
+from tutorai import (
+    chat,
+    chat_storage,
+    classes,
+    config,
+    db,
+    homerooms,
+    prompts,
+    rag,
+    subjects,
+    translations,
+    users,
+)
 
 db.init_db()
-classes.ensure_default_classes()
+classes.sync_with_teaching_assignments()
+homerooms.backfill_homerooms()
 
 st.set_page_config(page_title="TutorAI", page_icon="📚")
 
@@ -90,6 +103,44 @@ with st.sidebar:
 
 st.title(config.ASSISTANT_NAMES[role])
 
+
+def render_change_password_and_delete(username: str, text: dict) -> None:
+    """Shared password-change and delete-with-confirm controls for any
+    user, used by both the Teachers and Students admin menus."""
+    new_user_password = st.text_input(
+        text["new_password_label"], type="password", key=f"newpw_{username}"
+    )
+    if st.button(text["change_password_button"], key=f"changepw_{username}"):
+        if new_user_password:
+            users.set_password(username, new_user_password)
+            st.success(text["password_changed_message"])
+        else:
+            st.error(text["signup_missing_fields_error"])
+
+    if username == st.session_state.username:
+        st.caption(text["cannot_delete_self_message"])
+        return
+
+    pending_delete_key = f"confirm_delete_{username}"
+    if st.session_state.get(pending_delete_key):
+        st.warning(text["confirm_delete_message"].format(username=username))
+        confirm_col, cancel_col = st.columns(2)
+        with confirm_col:
+            if st.button(text["confirm_delete_button"], key=f"confirm_{username}"):
+                users.delete_user(username)
+                st.session_state[pending_delete_key] = False
+                st.success(text["user_deleted_message"])
+                st.rerun()
+        with cancel_col:
+            if st.button(text["cancel_button"], key=f"cancel_{username}"):
+                st.session_state[pending_delete_key] = False
+                st.rerun()
+    else:
+        if st.button(text["delete_user_button"], key=f"delete_{username}"):
+            st.session_state[pending_delete_key] = True
+            st.rerun()
+
+
 if role == "admin":
     st.subheader(text["admin_dashboard_header"])
 
@@ -121,64 +172,105 @@ if role == "admin":
             st.success(f"{text['add_user_success']} {text['join_code_label']}: {join_code}")
             st.rerun()
 
-    st.header(text["students_by_class_header"])
-    for class_record in classes.list_classes():
-        student_usernames = classes.students_in_class(class_record["id"])
-        with st.expander(f"{class_record['name']} ({len(student_usernames)})"):
-            if not student_usernames:
-                st.caption(text["no_students_in_class_message"])
-            else:
-                for student_username in student_usernames:
-                    student_record = users.get_user(student_username)
-                    if student_record["subject_links"]:
-                        subjects_text = ", ".join(
-                            f"{link['subject']} ({link['grade']})"
-                            for link in student_record["subject_links"]
-                        )
-                    else:
-                        subjects_text = text["no_links_message"]
-                    st.write(f"- **{student_username}** — {subjects_text}")
+    st.header(text["admin_teachers_menu_header"])
+    teacher_grade_filter = st.selectbox(
+        text["filter_by_grade_label"],
+        options=[text["all_grades_option"]] + subjects.GRADES,
+        key="teacher_filter_grade",
+    )
+    teacher_search_text = st.text_input(text["search_teacher_label"], key="teacher_filter_search")
 
-    st.header(text["all_users_header"])
-    admin_search_text = st.text_input(text["search_teacher_label"], key="admin_user_search")
-    for user in users.list_all_users(admin_search_text):
-        role_label = text[f"role_{user['role']}"]
-        with st.expander(f"{user['username']} — {role_label}"):
-            user_record = users.get_user(user["username"])
+    matching_teacher_usernames = {
+        u["username"] for u in users.list_all_users(teacher_search_text, role="teacher")
+    }
+    if teacher_grade_filter != text["all_grades_option"]:
+        matching_teacher_usernames &= {
+            class_record["teacher_username"]
+            for class_record in classes.list_classes(grade=teacher_grade_filter)
+        }
 
-            if user["role"] == "teacher":
-                st.write(f"{text['join_code_label']}: `{user['join_code']}`")
-                if st.button(
-                    text["regenerate_join_code_button"], key=f"regen_{user['username']}"
-                ):
-                    new_code = users.regenerate_join_code(user["username"])
+    if not matching_teacher_usernames:
+        st.caption(text["no_matching_users_message"])
+    else:
+        for teacher_username in sorted(matching_teacher_usernames):
+            teacher_record = users.get_user(teacher_username)
+            with st.expander(teacher_username):
+                st.write(f"{text['join_code_label']}: `{teacher_record['join_code']}`")
+                if st.button(text["regenerate_join_code_button"], key=f"regen_{teacher_username}"):
+                    new_code = users.regenerate_join_code(teacher_username)
                     st.success(f"{text['join_code_label']}: {new_code}")
                     st.rerun()
 
                 st.write(f"**{text['teaching_list_label']}**")
-                if not user_record["teaching"]:
+                if not teacher_record["teaching"]:
                     st.caption(text["no_teaching_message"])
                 else:
-                    for assignment in user_record["teaching"]:
-                        st.write(f"- {assignment['subject']} ({assignment['grade']})")
+                    for assignment in teacher_record["teaching"]:
+                        class_record = classes.get_or_create_class(
+                            teacher_username, assignment["grade"], assignment["subject"]
+                        )
+                        student_count = len(classes.students_in_class(class_record["id"]))
+                        st.write(
+                            f"- {assignment['subject']} ({assignment['grade']}) "
+                            f"— {student_count} {text['admin_students_menu_header'].lower()}"
+                        )
 
-            if user["role"] == "student":
+                render_change_password_and_delete(teacher_username, text)
+
+    st.header(text["admin_students_menu_header"])
+    student_grade_filter = st.selectbox(
+        text["filter_by_grade_label"],
+        options=[text["all_grades_option"]] + subjects.GRADES,
+        key="student_filter_grade",
+    )
+    classes_for_filter = classes.list_classes(
+        grade=None if student_grade_filter == text["all_grades_option"] else student_grade_filter
+    )
+    class_filter_choice = st.selectbox(
+        text["filter_by_class_label"],
+        options=[text["all_classes_option"]] + [c["name"] for c in classes_for_filter],
+        key="student_filter_class",
+    )
+    student_search_text = st.text_input(text["search_teacher_label"], key="student_filter_search")
+
+    matching_student_usernames = {
+        u["username"] for u in users.list_all_users(student_search_text, role="student")
+    }
+    if student_grade_filter != text["all_grades_option"]:
+        matching_student_usernames = {
+            username
+            for username in matching_student_usernames
+            if users.get_user(username)["grade"] == student_grade_filter
+        }
+    if class_filter_choice != text["all_classes_option"]:
+        chosen_class = next(c for c in classes_for_filter if c["name"] == class_filter_choice)
+        matching_student_usernames &= set(classes.students_in_class(chosen_class["id"]))
+
+    if not matching_student_usernames:
+        st.caption(text["no_matching_users_message"])
+    else:
+        for student_username in sorted(matching_student_usernames):
+            student_record = users.get_user(student_username)
+            with st.expander(student_username):
+                st.write(f"{text['grade_label']}: {student_record['grade']}")
+                st.write(f"{text['homeroom_label']}: {student_record['homeroom_name'] or '—'}")
+
                 st.write(f"**{text['links_list_label']}**")
-                if not user_record["subject_links"]:
+                if not student_record["subject_links"]:
                     st.caption(text["no_links_message"])
                 else:
-                    for link in user_record["subject_links"]:
+                    for link in student_record["subject_links"]:
                         link_col, remove_col = st.columns([4, 1])
                         with link_col:
                             st.write(f"- {link['subject']} ({link['grade']}) — {link['teacher']}")
                         with remove_col:
                             remove_key = (
-                                f"unlink_{user['username']}_{link['teacher']}_"
+                                f"unlink_{student_username}_{link['teacher']}_"
                                 f"{link['grade']}_{link['subject']}"
                             )
                             if st.button(text["remove_link_button"], key=remove_key):
                                 users.unlink_student_from_teacher(
-                                    user["username"],
+                                    student_username,
                                     link["teacher"],
                                     link["grade"],
                                     link["subject"],
@@ -187,14 +279,14 @@ if role == "admin":
                                 st.rerun()
 
                 st.write(f"**{text['add_link_header']}**")
-                all_teachers = [u["username"] for u in users.list_all_users() if u["role"] == "teacher"]
-                if not all_teachers:
+                all_teacher_usernames = [u["username"] for u in users.list_all_users(role="teacher")]
+                if not all_teacher_usernames:
                     st.caption(text["no_teachers_found"])
                 else:
                     chosen_teacher = st.selectbox(
                         text["select_teacher_label"],
-                        options=all_teachers,
-                        key=f"admin_link_teacher_{user['username']}",
+                        options=all_teacher_usernames,
+                        key=f"admin_link_teacher_{student_username}",
                     )
                     teacher_teaching = users.get_user(chosen_teacher)["teaching"]
                     if not teacher_teaching:
@@ -206,52 +298,25 @@ if role == "admin":
                         chosen_label = st.selectbox(
                             text["subject_label"],
                             options=teaching_labels,
-                            key=f"admin_link_subject_{user['username']}",
+                            key=f"admin_link_subject_{student_username}",
                         )
                         chosen_assignment = teacher_teaching[teaching_labels.index(chosen_label)]
-                        if st.button(text["link_button"], key=f"admin_link_button_{user['username']}"):
-                            users.link_student_to_teacher(
-                                user["username"],
-                                chosen_teacher,
-                                chosen_assignment["grade"],
-                                chosen_assignment["subject"],
-                            )
-                            st.success(text["link_success"])
-                            st.rerun()
-
-            new_user_password = st.text_input(
-                text["new_password_label"], type="password", key=f"newpw_{user['username']}"
-            )
-            if st.button(text["change_password_button"], key=f"changepw_{user['username']}"):
-                if new_user_password:
-                    users.set_password(user["username"], new_user_password)
-                    st.success(text["password_changed_message"])
-                else:
-                    st.error(text["signup_missing_fields_error"])
-
-            if user["username"] == st.session_state.username:
-                st.caption(text["cannot_delete_self_message"])
-            else:
-                pending_delete_key = f"confirm_delete_{user['username']}"
-                if st.session_state.get(pending_delete_key):
-                    st.warning(text["confirm_delete_message"].format(username=user["username"]))
-                    confirm_col, cancel_col = st.columns(2)
-                    with confirm_col:
                         if st.button(
-                            text["confirm_delete_button"], key=f"confirm_{user['username']}"
+                            text["link_button"], key=f"admin_link_button_{student_username}"
                         ):
-                            users.delete_user(user["username"])
-                            st.session_state[pending_delete_key] = False
-                            st.success(text["user_deleted_message"])
-                            st.rerun()
-                    with cancel_col:
-                        if st.button(text["cancel_button"], key=f"cancel_{user['username']}"):
-                            st.session_state[pending_delete_key] = False
-                            st.rerun()
-                else:
-                    if st.button(text["delete_user_button"], key=f"delete_{user['username']}"):
-                        st.session_state[pending_delete_key] = True
-                        st.rerun()
+                            try:
+                                users.link_student_to_teacher(
+                                    student_username,
+                                    chosen_teacher,
+                                    chosen_assignment["grade"],
+                                    chosen_assignment["subject"],
+                                )
+                                st.success(text["link_success"])
+                                st.rerun()
+                            except ValueError:
+                                st.error(text["link_failed_error"])
+
+                render_change_password_and_delete(student_username, text)
 
 elif role == "teacher":
     st.subheader(text["teacher_dashboard_header"])
@@ -462,7 +527,10 @@ else:  # role == "student"
         try:
             available_models = chat.get_available_models()
         except urllib.error.URLError:
-            st.error(text["ollama_unreachable"])
+            if chat.is_ollama_installed():
+                st.error(text["ollama_unreachable"])
+            else:
+                st.error(text["ollama_not_installed"])
             st.stop()
 
         default_index = (

@@ -10,12 +10,11 @@ appears in your shell history or in this conversation.
 
 import getpass
 
-from tutorai import classes, db, users
+from tutorai import db, users
 
 
 def main() -> None:
     db.init_db()
-    classes.ensure_default_classes()
 
     username = input("Admin username: ").strip()
     password = getpass.getpass("Admin password: ")
