@@ -3,8 +3,9 @@
 - Students log in, link to teachers (by search or join code), create
   chats for the grade+subject combos a teacher has unlocked for them,
   and chat with the Socratic tutor.
-- Teachers log in, declare which grade+subject combos they teach, see
-  their join code, and look at their linked students' chats.
+- Teachers log in, declare which grade+subject combos they teach, look
+  at their linked students' chats, and draft/save tests by chatting with
+  Logos (no RAG -- Logos doesn't search course documents).
 - The single Admin account (see create_admin.py) can see every user.
 
 Run this in iTerm with: python3 -m streamlit run tutorai/app.py
@@ -21,6 +22,7 @@ from tutorai import (
     classes,
     config,
     db,
+    exams,
     homerooms,
     prompts,
     rag,
@@ -393,7 +395,153 @@ elif role == "teacher":
                                     st.caption(message["created_at"])
 
     st.header(text["tests_header"])
-    st.info(text["tests_coming_soon"])
+
+    if "test_chats_loaded" not in st.session_state:
+        st.session_state.test_chats_loaded = False
+    if not st.session_state.test_chats_loaded:
+        st.session_state.test_chats = chat_storage.load_chats(st.session_state.username)
+        st.session_state.active_test_chat_id = None
+        st.session_state.test_chats_loaded = True
+
+    try:
+        logos_available_models = chat.get_available_models()
+    except urllib.error.URLError:
+        if chat.is_ollama_installed():
+            st.error(text["ollama_unreachable"])
+        else:
+            st.error(text["ollama_not_installed"])
+        logos_available_models = None
+
+    if logos_available_models:
+        logos_default_index = (
+            logos_available_models.index(config.CHAT_MODEL_NAME)
+            if config.CHAT_MODEL_NAME in logos_available_models
+            else 0
+        )
+        logos_selected_model = st.selectbox(
+            text["model_label"], logos_available_models, index=logos_default_index, key="logos_model"
+        )
+
+        st.subheader(text["logos_new_test_chat_header"])
+        if not current_user["teaching"]:
+            st.caption(text["no_teaching_message"])
+        else:
+            logos_teaching_labels = [
+                f"{a['subject']} ({a['grade']})" for a in current_user["teaching"]
+            ]
+            logos_chosen_label = st.selectbox(
+                text["subject_label"], options=logos_teaching_labels, key="logos_new_chat_subject"
+            )
+            logos_chosen_assignment = current_user["teaching"][
+                logos_teaching_labels.index(logos_chosen_label)
+            ]
+
+            if st.button(text["create_chat_button"], key="logos_create_chat"):
+                logos_system_prompt = prompts.build_logos_system_prompt(
+                    logos_chosen_assignment["grade"], logos_chosen_assignment["subject"], language
+                )
+                new_test_chat = chat_storage.create_chat(
+                    st.session_state.username,
+                    logos_chosen_assignment["grade"],
+                    logos_chosen_assignment["subject"],
+                    logos_system_prompt,
+                )
+                st.session_state.test_chats.append(new_test_chat)
+                st.session_state.active_test_chat_id = new_test_chat["id"]
+
+        st.subheader(text["chats_header"])
+        if not st.session_state.test_chats:
+            st.caption(text["no_chats_message"])
+        else:
+            logos_chat_labels = [
+                f"{c['subject']} ({c['grade']})" for c in st.session_state.test_chats
+            ]
+            logos_chat_ids = [c["id"] for c in st.session_state.test_chats]
+            logos_current_index = (
+                logos_chat_ids.index(st.session_state.active_test_chat_id)
+                if st.session_state.active_test_chat_id in logos_chat_ids
+                else 0
+            )
+            logos_chosen_chat_label = st.radio(
+                text["chats_header"],
+                logos_chat_labels,
+                index=logos_current_index,
+                key="logos_chat_picker",
+                label_visibility="collapsed",
+            )
+            st.session_state.active_test_chat_id = logos_chat_ids[
+                logos_chat_labels.index(logos_chosen_chat_label)
+            ]
+
+        active_test_chat = next(
+            (c for c in st.session_state.test_chats if c["id"] == st.session_state.active_test_chat_id),
+            None,
+        )
+
+        if active_test_chat is None:
+            st.info(text["no_chats_message"])
+        else:
+            st.write(f"**{active_test_chat['subject']} ({active_test_chat['grade']})**")
+
+            for message in active_test_chat["history"]:
+                if message["role"] == "system":
+                    continue
+                with st.chat_message(message["role"]):
+                    st.write(message["content"])
+
+            teacher_message = st.chat_input(text["chat_placeholder"], key="logos_chat_input")
+
+            if teacher_message:
+                with st.chat_message("user"):
+                    st.write(teacher_message)
+
+                try:
+                    with st.spinner(text["thinking_spinner"]):
+                        logos_reply = chat.ask_logos(
+                            active_test_chat["history"], teacher_message, logos_selected_model
+                        )
+                except urllib.error.URLError:
+                    st.error(text["ollama_disconnected"])
+                    st.stop()
+
+                with st.chat_message("assistant"):
+                    st.write(logos_reply)
+
+                chat_storage.add_message(active_test_chat["id"], "user", teacher_message)
+                chat_storage.add_message(active_test_chat["id"], "assistant", logos_reply)
+
+            last_logos_messages = [
+                m for m in active_test_chat["history"] if m["role"] == "assistant"
+            ]
+            if last_logos_messages:
+                st.write(f"**{text['save_test_header']}**")
+                test_title = st.text_input(
+                    text["test_title_label"], key=f"test_title_{active_test_chat['id']}"
+                )
+                if st.button(text["save_test_button"], key=f"save_test_{active_test_chat['id']}"):
+                    if not test_title:
+                        st.error(text["signup_missing_fields_error"])
+                    else:
+                        exams.save_test(
+                            st.session_state.username,
+                            active_test_chat["grade"],
+                            active_test_chat["subject"],
+                            test_title,
+                            last_logos_messages[-1]["content"],
+                        )
+                        st.success(text["test_saved_message"])
+
+    st.subheader(text["your_tests_header"])
+    saved_tests = exams.list_tests_for_teacher(st.session_state.username)
+    if not saved_tests:
+        st.caption(text["no_tests_message"])
+    else:
+        for saved_test in saved_tests:
+            with st.expander(f"{saved_test['title']} — {saved_test['subject']} ({saved_test['grade']})"):
+                st.write(saved_test["content"])
+                if st.button(text["delete_test_button"], key=f"delete_test_{saved_test['id']}"):
+                    exams.delete_test(saved_test["id"], st.session_state.username)
+                    st.rerun()
 
 else:  # role == "student"
     if not st.session_state.chats_loaded:

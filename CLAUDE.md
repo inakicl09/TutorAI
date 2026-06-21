@@ -99,7 +99,14 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `chat_storage.py` — `create_chat(...)` inserts a chat + its system
   message, `add_message(chat_id, role, content)` appends one message,
   `load_chats(username)` rebuilds full history per chat. All SQLite, all
-  on `db.py`.
+  on `db.py`. Reused as-is for both Socrates (student) and Logos
+  (teacher) conversations -- the schema doesn't care which role owns a
+  chat, so no changes were needed to support Logos.
+- `exams.py` — `save_test`/`list_tests_for_teacher`/`delete_test` on the
+  `tests` table (now has a `content` column, migrated in `db.py`).
+  Deliberately not named `tests.py`, so it doesn't read like the
+  project's pytest suite (`tests/`, no `__init__.py`, just a sibling
+  directory -- not an actual import collision, but a human-confusion one).
 - `app.py` — login/signup gate (role choice: student or teacher; no admin
   signup path), then branches by role:
   - **student**: sidebar has "link a teacher" (search by subject+grade,
@@ -107,9 +114,13 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     they're linked to), the chat list/switcher, model picker, PDF
     uploader. Each message is saved immediately via `chat_storage`.
   - **teacher**: shows their join code, a form to add more
-    `(grade, subject)` teaching assignments, and a read-only view of
-    every linked student's chats for subjects/grades they teach. Has a
-    "Tests" section that's just a "coming soon" placeholder.
+    `(grade, subject)` teaching assignments, a read-only view of every
+    linked student's chats for subjects/grades they teach, and a "Tests"
+    section: pick one of their own teaching assignments, create a chat
+    with Logos (`prompts.build_logos_system_prompt` /
+    `chat.ask_logos`, no RAG), then "Save as test" persists the latest
+    Logos reply via `exams.save_test`. Saved tests are listed below with
+    a delete button each.
   - **admin**: can add a student or teacher account, then has two
     separate, independently filterable menus (not one combined list):
     a **Teachers** menu (filter by grade, search by username) and a
@@ -205,6 +216,14 @@ confirming `./run.sh` still starts cleanly.
   case (`chat.is_ollama_installed()` / `tutor.is_ollama_installed()`),
   since a student with no Ollama at all needs different instructions
   than one who just hasn't run `ollama serve` yet.
+- Logos (teacher test-drafting chatbot) reuses `chat_storage.py` as-is
+  for its conversations -- same `chats`/`chat_messages` tables as
+  Socrates, just owned by a teacher's username instead of a student's,
+  since the schema never assumed a role. `chat.py`'s Ollama-call plumbing
+  was factored into a shared `_call_ollama_chat` helper so `ask_logos`
+  doesn't duplicate `ask_tutor`'s request/response handling -- it just
+  skips the RAG step entirely, per the earlier explicit instruction not
+  to add RAG for teachers/admin yet.
 - Moved all modules from flat root-level files into a `tutorai/` package
   plus a `tests/` directory with `pytest` coverage (user's explicit
   choice, 2026-06-20, overriding `AGENTS.md`'s earlier "keep it flat, no
@@ -222,12 +241,16 @@ during the SQLite migration since no real user data existed yet.
 
 ## Not yet built
 
-- The actual "create tests" feature for teachers — currently just a
-  "coming soon" message. A `tests` table already exists in `db.py` for
-  when this gets built.
 - Per-chat model selection (currently one global model for all chats).
-- Deleting/renaming chats. (Unlinking a student from a teacher is now
-  built — admin's Students menu has a remove button per link.)
+- Deleting/renaming chats (test chats included). (Unlinking a student
+  from a teacher is now built — admin's Students menu has a remove
+  button per link.)
+- RAG for Logos (teacher/admin) — explicitly deferred by the user; only
+  Socrates (student) searches uploaded course documents right now.
+- No structured test format (questions/answers as separate fields) —
+  a saved test is just the freeform text of Logos's last reply. Good
+  enough for drafting/printing, not for building an auto-graded
+  student-facing test-taking feature later.
 - Self-service password reset still doesn't exist, but admin can now
   reset any user's password from the dashboard as a workaround.
 - Admin can't change a user's role (e.g. promote student to teacher) or

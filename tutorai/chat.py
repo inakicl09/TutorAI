@@ -1,5 +1,6 @@
 """Conversation logic: combines the Socratic prompt, retrieved course
-material, and the Ollama model to produce the tutor's replies.
+material, and the Ollama model to produce the tutor's replies. Also
+talks to Logos, the teacher-facing test-drafting assistant (no RAG).
 """
 
 import json
@@ -33,6 +34,28 @@ def get_available_models() -> list[str]:
     ]
 
 
+def _call_ollama_chat(messages: list[dict], model_name: str) -> str:
+    """POST a list of messages to Ollama's /api/chat and return the
+    reply's content."""
+    request_body = {
+        "model": model_name,
+        "messages": messages,
+        "stream": False,
+    }
+    request_data = json.dumps(request_body).encode("utf-8")
+
+    request = urllib.request.Request(
+        config.OLLAMA_CHAT_URL,
+        data=request_data,
+        headers={"Content-Type": "application/json"},
+    )
+
+    with urllib.request.urlopen(request) as response:
+        response_body = json.loads(response.read())
+
+    return response_body["message"]["content"]
+
+
 def ask_tutor(
     conversation_history: list[dict],
     student_message: str,
@@ -56,23 +79,25 @@ def ask_tutor(
             "content": context_prompt + "\n\nStudent's message: " + student_message,
         }
 
-    request_body = {
-        "model": model_name,
-        "messages": messages_for_model,
-        "stream": False,
-    }
-    request_data = json.dumps(request_body).encode("utf-8")
-
-    request = urllib.request.Request(
-        config.OLLAMA_CHAT_URL,
-        data=request_data,
-        headers={"Content-Type": "application/json"},
-    )
-
-    with urllib.request.urlopen(request) as response:
-        response_body = json.loads(response.read())
-
-    tutor_reply = response_body["message"]["content"]
+    tutor_reply = _call_ollama_chat(messages_for_model, model_name)
     conversation_history.append({"role": "assistant", "content": tutor_reply})
 
     return tutor_reply
+
+
+def ask_logos(
+    conversation_history: list[dict],
+    teacher_message: str,
+    model_name: str = config.CHAT_MODEL_NAME,
+) -> str:
+    """Send the teacher's message to Logos and return its reply.
+
+    Unlike ask_tutor, there's no RAG step -- Logos doesn't search course
+    documents. `conversation_history` is updated in place, same as
+    ask_tutor.
+    """
+    conversation_history.append({"role": "user", "content": teacher_message})
+    logos_reply = _call_ollama_chat(conversation_history, model_name)
+    conversation_history.append({"role": "assistant", "content": logos_reply})
+
+    return logos_reply

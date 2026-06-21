@@ -111,14 +111,15 @@ def init_db() -> None:
                 PRIMARY KEY (chat_id, position)
             );
 
-            -- Not used yet: teachers' "create tests" feature is still a
-            -- stub, but the table is ready for when that's built.
+            -- A test/exam a teacher saved after drafting it with Logos
+            -- (see exams.py). `content` holds the saved draft text.
             CREATE TABLE IF NOT EXISTS tests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 teacher_username TEXT NOT NULL REFERENCES users(username),
                 grade TEXT NOT NULL,
                 subject TEXT NOT NULL,
-                title TEXT NOT NULL
+                title TEXT NOT NULL,
+                content TEXT
             );
             """
         )
@@ -130,6 +131,14 @@ def init_db() -> None:
         ]
         if "created_at" not in existing_chat_message_columns:
             connection.execute("ALTER TABLE chat_messages ADD COLUMN created_at TEXT")
+
+        # Migration: older databases had a `tests` table without content,
+        # from before Logos could actually draft and save one.
+        existing_test_columns = [
+            row["name"] for row in connection.execute("PRAGMA table_info(tests)")
+        ]
+        if existing_test_columns and "content" not in existing_test_columns:
+            connection.execute("ALTER TABLE tests ADD COLUMN content TEXT")
 
         # Migration: older databases had users.class_id (the old homeroom
         # link) instead of users.homeroom_id. Copy the values across;

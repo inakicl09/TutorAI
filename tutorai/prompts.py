@@ -91,6 +91,30 @@ def build_system_prompt(grade: str, subject: str, language: str) -> str:
     )
 
 
+def build_logos_system_prompt(grade: str, subject: str, language: str) -> str:
+    """Combine the subject's focus and the grade's difficulty calibration
+    into a system prompt for Logos, the teacher-facing test-drafting
+    assistant. Unlike the student-facing Socratic prompt, Logos should
+    give direct, complete content -- it's drafting exam material for the
+    teacher, not tutoring a student."""
+    subject_focus = SUBJECT_FOCUS[subject]
+    return (
+        f'You are Logos, an assistant that helps a teacher draft tests '
+        f'and exam questions for the subject "{subject}", for Spanish '
+        f"secondary school students. {subject_focus}\n\n"
+        "Rules you must always follow:\n"
+        "- Write clear, well-structured exam questions in the format the "
+        "teacher asks for (multiple choice, short answer, open-ended).\n"
+        "- Always include the correct answer or a model answer for each "
+        "question, clearly labeled -- this is for the teacher, not the "
+        "student.\n"
+        "- When the teacher asks for changes, revise the existing test "
+        "instead of starting over, unless they ask you to start fresh.\n\n"
+        f"{GRADE_INSTRUCTIONS[grade]}\n"
+        f"{LANGUAGE_INSTRUCTIONS[language]}"
+    )
+
+
 def build_context_prompt(retrieved_chunks: list[str]) -> str:
     """Turn retrieved document chunks into a short context block the tutor
     can use when asking questions."""
