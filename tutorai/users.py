@@ -15,8 +15,13 @@ Three account types:
 - "admin": a single account, pre-seeded by create_admin.py. There is no
   signup path for admin accounts in the app itself.
 
-Passwords are never stored in plain text. Each one is hashed with a
-random salt using hashlib's PBKDF2 implementation (standard library).
+Logins are verified against a PBKDF2 hash (hashlib, standard library),
+which is never reversed. Separately, each password is also stored in a
+reversibly *encrypted* form (see crypto.py) purely so the admin can view
+it -- a deliberate tradeoff the user explicitly asked for, despite the
+recommendation to use password resets instead. The hash is what actually
+protects logins; the encrypted copy is only as safe as crypto.py's key
+file.
 """
 
 import hashlib
@@ -24,7 +29,7 @@ import secrets
 import string
 from typing import Optional
 
-from tutorai import classes, db, homerooms, subjects
+from tutorai import classes, crypto, db, homerooms, subjects
 
 PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6
@@ -122,9 +127,17 @@ def create_student(username: str, password: str, grade: str) -> None:
         homeroom_id = homerooms.assign_homeroom(grade)["id"]
         salt = secrets.token_hex(16)
         connection.execute(
-            "INSERT INTO users (username, role, salt, password_hash, grade, homeroom_id) "
-            "VALUES (?, 'student', ?, ?, ?, ?)",
-            (username, salt, _hash_password(password, salt), grade, homeroom_id),
+            "INSERT INTO users "
+            "(username, role, salt, password_hash, encrypted_password, grade, homeroom_id) "
+            "VALUES (?, 'student', ?, ?, ?, ?, ?)",
+            (
+                username,
+                salt,
+                _hash_password(password, salt),
+                crypto.encrypt_password(password),
+                grade,
+                homeroom_id,
+            ),
         )
         connection.commit()
     finally:
@@ -146,9 +159,16 @@ def create_teacher(username: str, password: str) -> str:
         salt = secrets.token_hex(16)
         join_code = _generate_join_code(connection)
         connection.execute(
-            "INSERT INTO users (username, role, salt, password_hash, join_code) "
-            "VALUES (?, 'teacher', ?, ?, ?)",
-            (username, salt, _hash_password(password, salt), join_code),
+            "INSERT INTO users "
+            "(username, role, salt, password_hash, encrypted_password, join_code) "
+            "VALUES (?, 'teacher', ?, ?, ?, ?)",
+            (
+                username,
+                salt,
+                _hash_password(password, salt),
+                crypto.encrypt_password(password),
+                join_code,
+            ),
         )
         connection.commit()
         return join_code
@@ -171,9 +191,9 @@ def create_admin(username: str, password: str) -> None:
 
         salt = secrets.token_hex(16)
         connection.execute(
-            "INSERT INTO users (username, role, salt, password_hash) "
-            "VALUES (?, 'admin', ?, ?)",
-            (username, salt, _hash_password(password, salt)),
+            "INSERT INTO users (username, role, salt, password_hash, encrypted_password) "
+            "VALUES (?, 'admin', ?, ?, ?)",
+            (username, salt, _hash_password(password, salt), crypto.encrypt_password(password)),
         )
         connection.commit()
     finally:
@@ -341,10 +361,32 @@ def set_password(username: str, new_password: str) -> None:
 
         salt = secrets.token_hex(16)
         connection.execute(
-            "UPDATE users SET salt = ?, password_hash = ? WHERE username = ?",
-            (salt, _hash_password(new_password, salt), username),
+            "UPDATE users SET salt = ?, password_hash = ?, encrypted_password = ? "
+            "WHERE username = ?",
+            (
+                salt,
+                _hash_password(new_password, salt),
+                crypto.encrypt_password(new_password),
+                username,
+            ),
         )
         connection.commit()
+    finally:
+        connection.close()
+
+
+def get_plaintext_password(username: str) -> Optional[str]:
+    """Decrypt and return a user's actual password, for the admin
+    dashboard. Returns None if the account predates this feature and
+    hasn't had its password reset since (nothing to decrypt)."""
+    connection = db.get_connection()
+    try:
+        row = connection.execute(
+            "SELECT encrypted_password FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if row is None or row["encrypted_password"] is None:
+            return None
+        return crypto.decrypt_password(row["encrypted_password"])
     finally:
         connection.close()
 

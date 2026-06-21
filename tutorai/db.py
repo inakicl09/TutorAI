@@ -52,6 +52,7 @@ def init_db() -> None:
                 role TEXT NOT NULL,
                 salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
+                encrypted_password TEXT,
                 grade TEXT,
                 join_code TEXT UNIQUE,
                 homeroom_id INTEGER REFERENCES homerooms(id)
@@ -153,6 +154,13 @@ def init_db() -> None:
             )
             if "class_id" in existing_user_columns:
                 connection.execute("UPDATE users SET homeroom_id = class_id")
+
+        # Migration: older databases were created before users had an
+        # encrypted_password column (see crypto.py). Existing accounts'
+        # plaintext passwords were never stored anywhere, so this stays
+        # NULL for them until their password is reset.
+        if "encrypted_password" not in existing_user_columns:
+            connection.execute("ALTER TABLE users ADD COLUMN encrypted_password TEXT")
 
         connection.commit()
     finally:

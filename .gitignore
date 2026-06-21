@@ -212,3 +212,7 @@ data/chroma_db/*
 
 # TutorAI: SQLite database (user accounts with password hashes, chats)
 data/tutorai.db
+
+# TutorAI: password encryption key -- anyone with this file can decrypt
+# every stored password (see crypto.py). Never commit it.
+data/secret.key

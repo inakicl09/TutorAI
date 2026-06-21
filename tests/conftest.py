@@ -1,5 +1,6 @@
 """Shared pytest fixtures: every test gets its own throwaway SQLite
-database instead of touching data/tutorai.db.
+database and password-encryption key, instead of touching
+data/tutorai.db or data/secret.key.
 """
 
 import pytest
@@ -11,4 +12,5 @@ from tutorai import config, db
 def temp_database(tmp_path, monkeypatch):
     db_path = tmp_path / "test_tutorai.db"
     monkeypatch.setattr(config, "DB_PATH", str(db_path))
+    monkeypatch.setattr(config, "SECRET_KEY_PATH", str(tmp_path / "test_secret.key"))
     db.init_db()

@@ -197,6 +197,12 @@ if role == "admin":
         for teacher_username in sorted(matching_teacher_usernames):
             teacher_record = users.get_user(teacher_username)
             with st.expander(teacher_username):
+                teacher_password = users.get_plaintext_password(teacher_username)
+                if teacher_password is not None:
+                    st.write(f"{text['password_label_admin_view']}: `{teacher_password}`")
+                else:
+                    st.caption(text["password_not_available_message"])
+
                 st.write(f"{text['join_code_label']}: `{teacher_record['join_code']}`")
                 if st.button(text["regenerate_join_code_button"], key=f"regen_{teacher_username}"):
                     new_code = users.regenerate_join_code(teacher_username)
@@ -254,6 +260,12 @@ if role == "admin":
         for student_username in sorted(matching_student_usernames):
             student_record = users.get_user(student_username)
             with st.expander(student_username):
+                student_password = users.get_plaintext_password(student_username)
+                if student_password is not None:
+                    st.write(f"{text['password_label_admin_view']}: `{student_password}`")
+                else:
+                    st.caption(text["password_not_available_message"])
+
                 st.write(f"{text['grade_label']}: {student_record['grade']}")
                 st.write(f"{text['homeroom_label']}: {student_record['homeroom_name'] or '—'}")
 

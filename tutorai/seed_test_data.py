@@ -5,12 +5,14 @@ signing up 120 accounts by hand.
 Run it yourself: python3 -m tutorai.seed_test_data
 
 Creates ~10 teachers (each teaching 3-5 classes) and ~120 students (each
-connected to several classes), password "test1234" for all of them --
-only ever linking within the student's own grade or one grade below,
-never further -- and gives about half the students a sample chat with a
-few backdated messages so "last active" timestamps actually vary. Safe
-to re-run: accounts that already exist are skipped instead of being
-recreated.
+connected to several classes), all sharing the simple test password
+below -- only ever linking within the student's own grade or one grade
+below, never further -- and gives about half the students a sample chat
+with a few backdated messages so "last active" timestamps actually vary.
+Safe to re-run: accounts that already exist are skipped instead of
+being recreated, but every test account's password is reset to PASSWORD
+on every run, so it stays simple even if it was set under an older
+version of this script.
 
 Also fixes any subject_links left over from before that "own grade or
 one below" rule existed.
@@ -21,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from tutorai import chat_storage, classes, db, homerooms, prompts, subjects, users
 
-PASSWORD = "test1234"
+PASSWORD = "1234"
 NUM_TEACHERS = 10
 NUM_STUDENTS = 120
 
@@ -195,6 +197,13 @@ def seed_chat_activity(student_usernames: list[str]) -> None:
             )
 
 
+def reset_test_passwords(usernames: list[str]) -> None:
+    """Force every test account's password back to PASSWORD, even if it
+    already existed under an older (more complex) test password."""
+    for username in usernames:
+        users.set_password(username, PASSWORD)
+
+
 def main() -> None:
     db.init_db()
     classes.sync_with_teaching_assignments()
@@ -206,6 +215,7 @@ def main() -> None:
     student_usernames = seed_students(teacher_usernames)
     topped_up_links_count = top_up_student_links(student_usernames, teacher_usernames)
     seed_chat_activity(student_usernames)
+    reset_test_passwords(teacher_usernames + student_usernames)
 
     print(f"Added {topped_up_teaching_count} teaching assignment(s) so every teacher has at least 3.")
     print(f"Removed {removed_count} subject link(s) that were too far from a student's grade.")

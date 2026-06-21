@@ -70,8 +70,12 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     (search by username, alphabetical, optional role filter, no password
     data), `find_teacher_by_join_code` (the other linking path), and
     `unlink_student_from_teacher` (the inverse of linking).
-  - Passwords are hashed with `hashlib.pbkdf2_hmac` + a random per-user
-    salt (`secrets.token_hex`), both stdlib — never stored in plain text.
+  - Logins are verified against a PBKDF2 hash (`hashlib.pbkdf2_hmac` +
+    a random per-user salt via `secrets.token_hex`, both stdlib) — that
+    hash is never reversed. Separately, `crypto.py` stores each password
+    in a *reversibly encrypted* form too, purely so `get_plaintext_password`
+    can give the admin dashboard a "view password" feature — see the
+    security note below.
 - `create_admin.py` — one-time setup script you run yourself
   (`python3 -m tutorai.create_admin`). Uses `getpass` so the password is
   never typed into chat or shell history. No other way to create an
@@ -234,10 +238,39 @@ confirming `./run.sh` still starts cleanly.
 
 ## Known gotcha (db.py / users.py / chat_storage.py)
 
-`data/tutorai.db` is gitignored since it contains password hashes and
-private chat content — don't remove it from `.gitignore`. There is no
-migration script from the old JSON format; the JSON files were deleted
-during the SQLite migration since no real user data existed yet.
+`data/tutorai.db` is gitignored since it contains password hashes,
+encrypted passwords, and private chat content — don't remove it from
+`.gitignore`. There is no migration script from the old JSON format; the
+JSON files were deleted during the SQLite migration since no real user
+data existed yet.
+
+## Security note: admin can view passwords (deliberate tradeoff)
+
+`crypto.py` encrypts every password with `cryptography`'s Fernet
+(symmetric, authenticated encryption) using a key stored at
+`data/secret.key` (gitignored, generated on first use). `users.get_plaintext_password`
+decrypts it for the admin dashboard's "view password" field.
+
+This was the user's explicit choice after being warned: I first
+recommended keeping passwords hash-only and using the existing
+password-reset button instead, since reversible encryption means
+anyone who gets `data/secret.key` *and* the database can recover every
+real student's and teacher's actual password — not just test accounts.
+The user chose "store passwords reversibly for everyone" anyway. Login
+verification itself still uses the one-way PBKDF2 hash and is
+unaffected; only the new admin-facing feature carries this risk.
+
+Practical implications to keep in mind:
+- `data/secret.key` must never be committed or shared — treat it like a
+  master password.
+- Accounts created before this feature existed (or whose password was
+  never reset since) have `encrypted_password = NULL` and show "not
+  available" in the admin view until their password is reset.
+- Test accounts (`seed_test_data.py`) intentionally use a simple shared
+  password (`"1234"`, in `PASSWORD`) since they're "just to test out"
+  per the user — every run resets all test accounts back to it via
+  `reset_test_passwords`, even ones seeded under an older, more complex
+  test password.
 
 ## Not yet built
 

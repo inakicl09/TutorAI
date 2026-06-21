@@ -173,6 +173,30 @@ def test_set_password_rejects_unknown_username():
         users.set_password("nobody", "newpassword")
 
 
+def test_get_plaintext_password_for_newly_created_student():
+    users.create_student("ana", "secret123", "1º ESO")
+
+    assert users.get_plaintext_password("ana") == "secret123"
+
+
+def test_get_plaintext_password_for_newly_created_teacher():
+    users.create_teacher("profesor_lopez", "secret123")
+
+    assert users.get_plaintext_password("profesor_lopez") == "secret123"
+
+
+def test_get_plaintext_password_reflects_set_password():
+    users.create_student("ana", "secret123", "1º ESO")
+
+    users.set_password("ana", "newpassword")
+
+    assert users.get_plaintext_password("ana") == "newpassword"
+
+
+def test_get_plaintext_password_returns_none_for_unknown_username():
+    assert users.get_plaintext_password("nobody") is None
+
+
 def test_regenerate_join_code_changes_the_code_and_old_one_stops_working():
     old_code = users.create_teacher("profesor_lopez", "secret123")
 

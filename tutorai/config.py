@@ -9,6 +9,11 @@ DOCUMENTS_DIR = "data/documents"
 CHROMA_DIR = "data/chroma_db"
 DB_PATH = "data/tutorai.db"
 
+# Key used to let the admin view a user's actual password (see crypto.py).
+# Generated on first use if missing. Never commit this file -- whoever
+# holds it can decrypt every stored password.
+SECRET_KEY_PATH = "data/secret.key"
+
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 NUM_CHUNKS_TO_RETRIEVE = 4
