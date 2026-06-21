@@ -80,8 +80,49 @@ def test_link_student_to_teacher_succeeds_when_teacher_teaches_it():
     assert users.students_linked_to_teacher("profesor_lopez") == ["ana"]
 
 
-def test_unlink_student_from_teacher_removes_only_that_link():
+def test_allowed_link_grades_includes_own_grade_and_one_below():
+    assert users.allowed_link_grades("3º ESO") == {"3º ESO", "2º ESO"}
+
+
+def test_allowed_link_grades_has_no_grade_below_for_the_first_grade():
+    assert users.allowed_link_grades("1º ESO") == {"1º ESO"}
+
+
+def test_link_student_to_teacher_rejects_grade_above_the_students_own():
     users.create_student("ana", "secret123", "1º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "2º ESO", "Matemáticas")
+
+    with pytest.raises(ValueError):
+        users.link_student_to_teacher("ana", "profesor_lopez", "2º ESO", "Matemáticas")
+
+
+def test_link_student_to_teacher_rejects_grade_more_than_one_below():
+    users.create_student("ana", "secret123", "3º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "1º ESO", "Matemáticas")
+
+    with pytest.raises(ValueError):
+        users.link_student_to_teacher("ana", "profesor_lopez", "1º ESO", "Matemáticas")
+
+
+def test_link_student_to_teacher_allows_exactly_one_grade_below():
+    users.create_student("ana", "secret123", "3º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "2º ESO", "Matemáticas")
+
+    users.link_student_to_teacher("ana", "profesor_lopez", "2º ESO", "Matemáticas")
+
+    student = users.get_user("ana")
+    assert {
+        "grade": "2º ESO",
+        "subject": "Matemáticas",
+        "teacher": "profesor_lopez",
+    } in student["subject_links"]
+
+
+def test_unlink_student_from_teacher_removes_only_that_link():
+    users.create_student("ana", "secret123", "2º ESO")
     users.create_teacher("profesor_lopez", "secret123")
     users.add_teaching_assignment("profesor_lopez", "1º ESO", "Matemáticas")
     users.add_teaching_assignment("profesor_lopez", "2º ESO", "Matemáticas")

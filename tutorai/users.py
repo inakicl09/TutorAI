@@ -2,10 +2,12 @@
 (see db.py).
 
 Three account types:
-- "student": has a home grade and a list of subject links, each one
-  pointing at the teacher who gave them access to that grade+subject.
-  This is what lets a student retake a subject at a lower grade, as long
-  as a teacher for that grade+subject has linked them.
+- "student": has a home grade, a class (one per grade, see classes.py),
+  and a list of subject links, each one pointing at the teacher who gave
+  them access to that grade+subject. A student's subject links can only
+  be for their own grade or the grade immediately below it -- this is
+  what lets a student retake a subject at a lower grade without letting
+  their subjects span the whole curriculum.
 - "teacher": has a list of (grade, subject) pairs they teach, and a join
   code students can use to link to them instead of searching.
 - "admin": a single account, pre-seeded by create_admin.py. There is no
@@ -20,7 +22,7 @@ import secrets
 import string
 from typing import Optional
 
-from tutorai import db
+from tutorai import classes, db, subjects
 
 PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6
@@ -67,6 +69,14 @@ def get_user(username: str) -> Optional[dict]:
             return None
 
         user = dict(user_row)
+        if user["class_id"] is not None:
+            class_row = connection.execute(
+                "SELECT name FROM classes WHERE id = ?", (user["class_id"],)
+            ).fetchone()
+            user["class_name"] = class_row["name"] if class_row else None
+        else:
+            user["class_name"] = None
+
         user["teaching"] = [
             dict(row)
             for row in connection.execute(
@@ -98,8 +108,10 @@ def verify_login(username: str, password: str) -> bool:
 
 
 def create_student(username: str, password: str, grade: str) -> None:
-    """Add a new student account. Raises ValueError if the username is
-    already taken."""
+    """Add a new student account, automatically placed in their grade's
+    class. Raises ValueError if the username is already taken."""
+    class_id = classes.get_class_for_grade(grade)["id"]
+
     connection = db.get_connection()
     try:
         if connection.execute(
@@ -109,9 +121,9 @@ def create_student(username: str, password: str, grade: str) -> None:
 
         salt = secrets.token_hex(16)
         connection.execute(
-            "INSERT INTO users (username, role, salt, password_hash, grade) "
-            "VALUES (?, 'student', ?, ?, ?)",
-            (username, salt, _hash_password(password, salt), grade),
+            "INSERT INTO users (username, role, salt, password_hash, grade, class_id) "
+            "VALUES (?, 'student', ?, ?, ?, ?)",
+            (username, salt, _hash_password(password, salt), grade, class_id),
         )
         connection.commit()
     finally:
@@ -209,16 +221,40 @@ def find_teacher_by_join_code(join_code: str) -> Optional[str]:
         connection.close()
 
 
+def allowed_link_grades(student_grade: str) -> set:
+    """A student may only link to subjects at their own grade, or the
+    grade immediately below it (e.g. for retaking a failed subject) --
+    never anything further away."""
+    allowed = {student_grade}
+    grade_index = subjects.GRADES.index(student_grade)
+    if grade_index > 0:
+        allowed.add(subjects.GRADES[grade_index - 1])
+    return allowed
+
+
 def link_student_to_teacher(
     student_username: str, teacher_username: str, grade: str, subject: str
 ) -> None:
     """Give a student access to a grade+subject through a specific teacher.
 
     Raises ValueError if that teacher doesn't actually teach that
-    grade+subject.
+    grade+subject, or if that grade is more than one grade below the
+    student's own.
     """
     connection = db.get_connection()
     try:
+        student_row = connection.execute(
+            "SELECT grade FROM users WHERE username = ? AND role = 'student'",
+            (student_username,),
+        ).fetchone()
+        if student_row is None:
+            raise ValueError("Not a student account")
+        if grade not in allowed_link_grades(student_row["grade"]):
+            raise ValueError(
+                "That grade is too far from the student's own grade "
+                "(only their own grade or one grade below is allowed)"
+            )
+
         taught = connection.execute(
             "SELECT 1 FROM teaching_assignments "
             "WHERE teacher_username = ? AND grade = ? AND subject = ?",

@@ -12,7 +12,7 @@ import json
 import urllib.error
 import urllib.request
 
-from tutorai import chat_storage, config, db, prompts, subjects, translations, users
+from tutorai import chat_storage, classes, config, db, prompts, subjects, translations, users
 
 QUIT_WORDS = {"quit", "exit", "salir"}
 
@@ -187,6 +187,7 @@ def ask_ollama(conversation_history: list[dict], model_name: str) -> str:
 
 def main() -> None:
     db.init_db()
+    classes.ensure_default_classes()
 
     language = choose_language()
     text = translations.TEXT[language]

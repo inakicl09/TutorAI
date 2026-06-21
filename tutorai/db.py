@@ -30,7 +30,17 @@ def init_db() -> None:
                 salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 grade TEXT,
-                join_code TEXT UNIQUE
+                join_code TEXT UNIQUE,
+                class_id INTEGER REFERENCES classes(id)
+            );
+
+            -- One classroom group per grade (e.g. "1º ESO - A"). Only one
+            -- class per grade exists for now, but it's a real table so
+            -- more can be added later without changing the data model.
+            CREATE TABLE IF NOT EXISTS classes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                grade TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS teaching_assignments (
@@ -78,11 +88,19 @@ def init_db() -> None:
 
         # Migration: older databases were created before chat_messages had
         # a created_at column.
-        existing_columns = [
+        existing_chat_message_columns = [
             row["name"] for row in connection.execute("PRAGMA table_info(chat_messages)")
         ]
-        if "created_at" not in existing_columns:
+        if "created_at" not in existing_chat_message_columns:
             connection.execute("ALTER TABLE chat_messages ADD COLUMN created_at TEXT")
+
+        # Migration: older databases were created before users had a
+        # class_id column (and before the classes table existed).
+        existing_user_columns = [
+            row["name"] for row in connection.execute("PRAGMA table_info(users)")
+        ]
+        if "class_id" not in existing_user_columns:
+            connection.execute("ALTER TABLE users ADD COLUMN class_id INTEGER REFERENCES classes(id)")
 
         connection.commit()
     finally:

@@ -27,21 +27,34 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `config.py` — Ollama URLs, model names, file paths, RAG chunk settings,
   the SQLite `DB_PATH`.
 - `db.py` — single SQLite database (`data/tutorai.db`, gitignored).
-  Tables: `users`, `teaching_assignments`, `subject_links`, `chats`,
-  `chat_messages`, and a `tests` table that exists but is unused (see
-  "Not yet built"). `init_db()` is safe to call every startup.
+  Tables: `users`, `classes`, `teaching_assignments`, `subject_links`,
+  `chats`, `chat_messages`, and a `tests` table that exists but is unused
+  (see "Not yet built"). `init_db()` is safe to call every startup.
+- `classes.py` — one classroom group per grade (e.g. "1º ESO - A"), only
+  one class per grade for now. `ensure_default_classes()` creates the six
+  classes if missing and backfills `class_id` for any student who
+  predates this feature; called right after `db.init_db()` in every
+  entry point (`app.py`, `tutor.py`, `create_admin.py`,
+  `seed_test_data.py`, and the test fixture).
 - `users.py` — signup/login plus the role system, all on top of `db.py`:
-  - `create_student(username, password, grade)` / `create_teacher(...)`
-    (returns a join code) / `create_admin(...)` (used only by
-    `create_admin.py`, not exposed in any signup form).
+  - `create_student(username, password, grade)` (auto-assigned to that
+    grade's class) / `create_teacher(...)` (returns a join code) /
+    `create_admin(...)` (used only by `create_admin.py`, not exposed in
+    any signup form).
   - Teachers declare `(grade, subject)` pairs they teach via
     `add_teaching_assignment`.
   - Students get access to a `(grade, subject)` only through
-    `link_student_to_teacher`, which checks the teacher actually teaches
-    it. This is what lets a student retake a subject at a lower grade —
-    they just need a teacher linked for that specific grade+subject.
-  - `find_teachers` (search by username), `find_teachers_for_subject_grade`
-    (browse), `find_teacher_by_join_code` (the other linking path).
+    `link_student_to_teacher`, which checks both that the teacher
+    actually teaches it AND that the grade is the student's own grade or
+    exactly one grade below (`allowed_link_grades`) — never further. This
+    is what lets a student retake a subject at a lower grade, without
+    letting their subjects span the whole curriculum. `seed_test_data.py`
+    has a `fix_invalid_subject_links()` cleanup pass for links created
+    before this rule existed.
+  - `find_teachers` (search by username, alphabetical), `list_all_users`
+    (search by username, alphabetical, no password data),
+    `find_teacher_by_join_code` (the other linking path), and
+    `unlink_student_from_teacher` (the inverse of linking).
   - Passwords are hashed with `hashlib.pbkdf2_hmac` + a random per-user
     salt (`secrets.token_hex`), both stdlib — never stored in plain text.
 - `create_admin.py` — one-time setup script you run yourself
@@ -77,7 +90,11 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     `(grade, subject)` teaching assignments, and a read-only view of
     every linked student's chats for subjects/grades they teach. Has a
     "Tests" section that's just a "coming soon" placeholder.
-  - **admin**: can add a student or teacher account, list every user,
+  - **admin**: can add a student or teacher account, browse students
+    grouped by class+grade (`classes.list_classes` /
+    `classes.students_in_class`), search/list every user alphabetically,
+    view a teacher's full teaching list or a student's full link list
+    (with per-link remove buttons and an admin-initiated link form),
     change anyone's password (the password-recovery mechanism, since
     there's no self-service flow), regenerate a teacher's join code, and
     delete a user (with a confirm/cancel step first). Deleting a user
@@ -137,10 +154,19 @@ confirming `./run.sh` still starts cleanly.
 - Admin is pre-seeded via `create_admin.py`, not signup — "limited to
   myself" per the user. Teachers self-signup and self-declare which
   grade+subject pairs they teach (no admin approval step). Students link
-  to teachers either by searching (subject+grade+username) or by join
-  code — both paths were explicitly requested, not just one.
+  to teachers either by searching by username (seeing every matching
+  teacher's full subject list) or by join code — both paths were
+  explicitly requested, not just one.
 - Subject/grade names are kept as official Spanish curriculum terms in
   both language modes (not translated).
+- A student's subject links are capped at their own grade or exactly one
+  grade below (`users.allowed_link_grades`) — added after the user
+  noticed seeded students had subjects spanning very distant grades,
+  which didn't reflect a realistic "retaking one subject" scenario.
+- Classes are modeled as a real table (one per grade for now) rather
+  than just grouping by the existing `grade` column, since the user
+  asked for "classes" as their own concept — anticipating multiple
+  classes per grade later without a data model change.
 - Moved all modules from flat root-level files into a `tutorai/` package
   plus a `tests/` directory with `pytest` coverage (user's explicit
   choice, 2026-06-20, overriding `AGENTS.md`'s earlier "keep it flat, no

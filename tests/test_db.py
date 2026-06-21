@@ -13,6 +13,7 @@ def test_init_db_creates_expected_tables():
 
     expected_tables = {
         "users",
+        "classes",
         "teaching_assignments",
         "subject_links",
         "chats",

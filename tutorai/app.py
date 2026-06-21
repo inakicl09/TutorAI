@@ -15,9 +15,10 @@ import urllib.error
 
 import streamlit as st
 
-from tutorai import chat, chat_storage, config, db, prompts, rag, subjects, translations, users
+from tutorai import chat, chat_storage, classes, config, db, prompts, rag, subjects, translations, users
 
 db.init_db()
+classes.ensure_default_classes()
 
 st.set_page_config(page_title="TutorAI", page_icon="📚")
 
@@ -119,6 +120,24 @@ if role == "admin":
             join_code = users.create_teacher(new_username, new_password)
             st.success(f"{text['add_user_success']} {text['join_code_label']}: {join_code}")
             st.rerun()
+
+    st.header(text["students_by_class_header"])
+    for class_record in classes.list_classes():
+        student_usernames = classes.students_in_class(class_record["id"])
+        with st.expander(f"{class_record['name']} ({len(student_usernames)})"):
+            if not student_usernames:
+                st.caption(text["no_students_in_class_message"])
+            else:
+                for student_username in student_usernames:
+                    student_record = users.get_user(student_username)
+                    if student_record["subject_links"]:
+                        subjects_text = ", ".join(
+                            f"{link['subject']} ({link['grade']})"
+                            for link in student_record["subject_links"]
+                        )
+                    else:
+                        subjects_text = text["no_links_message"]
+                    st.write(f"- **{student_username}** — {subjects_text}")
 
     st.header(text["all_users_header"])
     admin_search_text = st.text_input(text["search_teacher_label"], key="admin_user_search")
