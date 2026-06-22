@@ -415,8 +415,9 @@ def regenerate_join_code(teacher_username: str) -> str:
 
 def delete_user(username: str) -> None:
     """Delete a user account and everything that references it (their
-    chats, teaching assignments, classes, and subject links in either
-    direction). Raises ValueError if the username is unknown.
+    chats, teaching assignments, classes, tests/questions/submissions,
+    and subject links in either direction). Raises ValueError if the
+    username is unknown.
 
     Used by the admin dashboard. There's no role branching here: each
     DELETE only matches rows that actually exist for this user's role, so
@@ -448,7 +449,21 @@ def delete_user(username: str) -> None:
             "DELETE FROM teaching_assignments WHERE teacher_username = ?", (username,)
         )
         connection.execute("DELETE FROM classes WHERE teacher_username = ?", (username,))
+
+        connection.execute(
+            "DELETE FROM test_submissions WHERE student_username = ?", (username,)
+        )
+        test_ids = [
+            row["id"]
+            for row in connection.execute(
+                "SELECT id FROM tests WHERE teacher_username = ?", (username,)
+            )
+        ]
+        for test_id in test_ids:
+            connection.execute("DELETE FROM test_questions WHERE test_id = ?", (test_id,))
+            connection.execute("DELETE FROM test_submissions WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM tests WHERE teacher_username = ?", (username,))
+
         connection.execute("DELETE FROM users WHERE username = ?", (username,))
         connection.commit()
     finally:

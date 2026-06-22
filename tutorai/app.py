@@ -45,6 +45,13 @@ if "chats_loaded" not in st.session_state:
     st.session_state.chats_loaded = False
 if "test_chats_loaded" not in st.session_state:
     st.session_state.test_chats_loaded = False
+if "artemis_chat_loaded" not in st.session_state:
+    st.session_state.artemis_chat_loaded = False
+
+# Sentinel grade/subject for Artemis's single chat -- admin isn't tied to
+# a real grade or subject, but the chats table requires both.
+ARTEMIS_GRADE = "Admin"
+ARTEMIS_SUBJECT = "Artemis"
 
 with st.sidebar:
     language = st.selectbox(
@@ -108,18 +115,20 @@ SCREENS_BY_ROLE = {
         ("add_user", "add_user_header"),
         ("teachers", "admin_teachers_menu_header"),
         ("students", "admin_students_menu_header"),
+        ("artemis", "screen_artemis"),
     ],
     "teacher": [
         ("main_menu", "screen_main_menu"),
         ("supervise", "screen_supervise"),
         ("my_classes", "screen_my_classes"),
-        ("tests", "tests_header"),
+        ("tests", "screen_logos"),
     ],
     "student": [
         ("main_menu", "screen_main_menu"),
         ("chat", "screen_chat"),
         ("link_teacher", "screen_link_teacher"),
         ("material", "screen_material"),
+        ("tests", "screen_student_tests"),
     ],
 }
 
@@ -129,6 +138,7 @@ with st.sidebar:
         st.session_state.username = None
         st.session_state.chats_loaded = False
         st.session_state.test_chats_loaded = False
+        st.session_state.artemis_chat_loaded = False
         st.rerun()
 
     screen_ids = [screen_id for screen_id, _ in SCREENS_BY_ROLE[role]]
@@ -174,6 +184,39 @@ def render_change_password_and_delete(username: str, text: dict) -> None:
         if st.button(text["delete_user_button"], key=f"delete_{username}"):
             st.session_state[pending_delete_key] = True
             st.rerun()
+
+
+MAX_ACTIVITY_SUMMARY_LENGTH = 6000
+
+
+def build_class_activity_summary(teacher_username: str, grade: str, subject: str) -> str:
+    """Gather the linked students' chat activity for one of a teacher's
+    classes, formatted as plain text for Logos's analysis-mode prompt.
+    Truncated to a fixed length as a simple guard against overflowing
+    the model's context window."""
+    lines = []
+    for student_username in users.students_linked_to_teacher(teacher_username):
+        student_record = users.get_user(student_username)
+        is_linked_to_this_class = any(
+            link["teacher"] == teacher_username and link["grade"] == grade and link["subject"] == subject
+            for link in student_record["subject_links"]
+        )
+        if not is_linked_to_this_class:
+            continue
+
+        matching_chats = [
+            c
+            for c in chat_storage.load_chats(student_username)
+            if c["grade"] == grade and c["subject"] == subject
+        ]
+        for student_chat in matching_chats:
+            for message in student_chat["history"]:
+                if message["role"] == "system":
+                    continue
+                lines.append(f"{student_username} ({message['role']}): {message['content']}")
+
+    summary = "\n".join(lines)
+    return summary[:MAX_ACTIVITY_SUMMARY_LENGTH]
 
 
 if role == "admin":
@@ -398,6 +441,72 @@ if role == "admin":
 
                     render_change_password_and_delete(student_username, text)
 
+    else:  # screen == "artemis"
+        if not st.session_state.artemis_chat_loaded:
+            existing_chats = chat_storage.load_chats(st.session_state.username)
+            if existing_chats:
+                st.session_state.artemis_chat = existing_chats[0]
+            else:
+                artemis_system_prompt = prompts.build_artemis_system_prompt(language)
+                st.session_state.artemis_chat = chat_storage.create_chat(
+                    st.session_state.username, ARTEMIS_GRADE, ARTEMIS_SUBJECT, artemis_system_prompt
+                )
+            st.session_state.artemis_chat_loaded = True
+
+        try:
+            artemis_available_models = chat.get_available_models()
+        except urllib.error.URLError:
+            if chat.is_ollama_installed():
+                st.error(text["ollama_unreachable"])
+            else:
+                st.error(text["ollama_not_installed"])
+            artemis_available_models = None
+
+        if artemis_available_models:
+            artemis_default_index = (
+                artemis_available_models.index(config.CHAT_MODEL_NAME)
+                if config.CHAT_MODEL_NAME in artemis_available_models
+                else 0
+            )
+            artemis_selected_model = st.selectbox(
+                text["model_label"],
+                artemis_available_models,
+                index=artemis_default_index,
+                key="artemis_model",
+            )
+
+            artemis_chat = st.session_state.artemis_chat
+            has_visible_messages = any(m["role"] != "system" for m in artemis_chat["history"])
+            if not has_visible_messages:
+                st.caption(text["artemis_intro_message"])
+
+            for message in artemis_chat["history"]:
+                if message["role"] == "system":
+                    continue
+                with st.chat_message(message["role"]):
+                    st.write(message["content"])
+
+            admin_message = st.chat_input(text["chat_placeholder"], key="artemis_chat_input")
+
+            if admin_message:
+                with st.chat_message("user"):
+                    st.write(admin_message)
+
+                try:
+                    with st.spinner(text["thinking_spinner"]):
+                        artemis_reply = chat.ask_assistant(
+                            artemis_chat["history"], admin_message, artemis_selected_model
+                        )
+                except urllib.error.URLError:
+                    st.error(text["ollama_disconnected"])
+                    st.stop()
+
+                with st.chat_message("assistant"):
+                    st.write(artemis_reply)
+
+                chat_storage.add_message(artemis_chat["id"], "user", admin_message)
+                chat_storage.add_message(artemis_chat["id"], "assistant", artemis_reply)
+
 elif role == "teacher":
     if screen == "main_menu":
         st.write(text["welcome_message"].format(username=st.session_state.username))
@@ -521,10 +630,36 @@ elif role == "teacher":
                 key="logos_model",
             )
 
+            st.subheader(text["material_for_exams_header"])
+            st.caption(text["upload_for_exams_help"])
+            uploaded_exam_pdf = st.file_uploader(
+                text["upload_label"], type="pdf", key="logos_pdf_uploader"
+            )
+            if uploaded_exam_pdf is not None and st.button(
+                text["upload_button"], key="logos_upload_button"
+            ):
+                os.makedirs(config.DOCUMENTS_DIR, exist_ok=True)
+                exam_pdf_path = os.path.join(config.DOCUMENTS_DIR, uploaded_exam_pdf.name)
+
+                with open(exam_pdf_path, "wb") as pdf_file:
+                    pdf_file.write(uploaded_exam_pdf.getbuffer())
+
+                with st.spinner(text["upload_spinner"]):
+                    num_chunks_added = rag.add_pdf_to_vector_store(
+                        exam_pdf_path, collection_name=rag.TEACHER_MATERIALS_COLLECTION
+                    )
+
+                st.success(text["upload_success"].format(num_chunks=num_chunks_added))
+
             st.subheader(text["logos_new_test_chat_header"])
             if not current_user["teaching"]:
                 st.caption(text["no_teaching_message"])
             else:
+                logos_mode_label = st.radio(
+                    text["logos_mode_label"],
+                    [text["logos_mode_draft"], text["logos_mode_analyze"]],
+                    key="logos_new_chat_mode",
+                )
                 logos_teaching_labels = [
                     f"{a['subject']} ({a['grade']})" for a in current_user["teaching"]
                 ]
@@ -538,17 +673,56 @@ elif role == "teacher":
                 ]
 
                 if st.button(text["create_chat_button"], key="logos_create_chat"):
-                    logos_system_prompt = prompts.build_logos_system_prompt(
-                        logos_chosen_assignment["grade"],
-                        logos_chosen_assignment["subject"],
-                        language,
-                    )
+                    if logos_mode_label == text["logos_mode_draft"]:
+                        logos_mode_id = "draft"
+                        logos_system_prompt = prompts.build_logos_system_prompt(
+                            logos_chosen_assignment["grade"],
+                            logos_chosen_assignment["subject"],
+                            language,
+                        )
+                    else:
+                        logos_mode_id = "analyze"
+                        activity_summary = build_class_activity_summary(
+                            st.session_state.username,
+                            logos_chosen_assignment["grade"],
+                            logos_chosen_assignment["subject"],
+                        ) or text["no_student_activity_message"]
+                        logos_system_prompt = prompts.build_logos_analysis_prompt(
+                            logos_chosen_assignment["grade"],
+                            logos_chosen_assignment["subject"],
+                            language,
+                            activity_summary,
+                        )
+
                     new_test_chat = chat_storage.create_chat(
                         st.session_state.username,
                         logos_chosen_assignment["grade"],
                         logos_chosen_assignment["subject"],
                         logos_system_prompt,
+                        mode=logos_mode_id,
                     )
+
+                    # Both modes immediately ask Logos something, rather
+                    # than leaving a blank chat the teacher has to prompt
+                    # themselves -- "analyze" relies only on the activity
+                    # summary already baked into the system prompt above
+                    # (never mixing in exam-material RAG here), while
+                    # "draft" uses ask_logos_with_material so any
+                    # uploaded PDF is pulled in right away.
+                    if logos_mode_id == "analyze":
+                        opening_prompt_text = text["analysis_opening_prompt"]
+                        opening_reply = chat.ask_assistant(
+                            new_test_chat["history"], opening_prompt_text, logos_selected_model
+                        )
+                    else:
+                        opening_prompt_text = text["draft_opening_prompt"]
+                        opening_reply = chat.ask_logos_with_material(
+                            new_test_chat["history"], opening_prompt_text, logos_selected_model
+                        )
+
+                    chat_storage.add_message(new_test_chat["id"], "user", opening_prompt_text)
+                    chat_storage.add_message(new_test_chat["id"], "assistant", opening_reply)
+
                     st.session_state.test_chats.append(new_test_chat)
                     st.session_state.active_test_chat_id = new_test_chat["id"]
 
@@ -602,9 +776,18 @@ elif role == "teacher":
                     with st.chat_message("user"):
                         st.write(teacher_message)
 
+                    # "draft" chats can use the teacher's uploaded exam
+                    # material as RAG context; "analyze" chats rely only
+                    # on the student activity baked into their system
+                    # prompt and must never pull in unrelated PDF content.
+                    ask_logos = (
+                        chat.ask_logos_with_material
+                        if active_test_chat.get("mode") != "analyze"
+                        else chat.ask_assistant
+                    )
                     try:
                         with st.spinner(text["thinking_spinner"]):
-                            logos_reply = chat.ask_logos(
+                            logos_reply = ask_logos(
                                 active_test_chat["history"], teacher_message, logos_selected_model
                             )
                     except urllib.error.URLError:
@@ -652,6 +835,104 @@ elif role == "teacher":
                     st.write(saved_test["content"])
                     if st.button(text["delete_test_button"], key=f"delete_test_{saved_test['id']}"):
                         exams.delete_test(saved_test["id"], st.session_state.username)
+                        st.rerun()
+
+        st.subheader(text["generate_structured_test_header"])
+        if not current_user["teaching"]:
+            st.caption(text["no_teaching_message"])
+        elif not logos_available_models:
+            st.caption(text["ollama_unreachable"])
+        else:
+            gen_teaching_labels = [
+                f"{a['subject']} ({a['grade']})" for a in current_user["teaching"]
+            ]
+            gen_chosen_label = st.selectbox(
+                text["subject_label"], options=gen_teaching_labels, key="gen_test_subject"
+            )
+            gen_chosen_assignment = current_user["teaching"][
+                gen_teaching_labels.index(gen_chosen_label)
+            ]
+            num_questions = st.number_input(
+                text["num_questions_label"],
+                min_value=1,
+                max_value=20,
+                value=5,
+                key="gen_num_questions",
+            )
+            gen_test_title = st.text_input(text["test_title_label"], key="gen_test_title")
+
+            if st.button(text["generate_test_button"], key="gen_test_button"):
+                with st.spinner(text["generating_test_spinner"]):
+                    raw_test_text = chat.generate_structured_test(
+                        gen_chosen_assignment["grade"],
+                        gen_chosen_assignment["subject"],
+                        language,
+                        int(num_questions),
+                        logos_selected_model,
+                    )
+                parsed_questions = exams.parse_structured_test(raw_test_text)
+                st.session_state.generated_test_questions = parsed_questions
+                st.session_state.generated_test_grade = gen_chosen_assignment["grade"]
+                st.session_state.generated_test_subject = gen_chosen_assignment["subject"]
+
+                if not parsed_questions:
+                    st.error(text["test_generation_failed_error"])
+                elif len(parsed_questions) < num_questions:
+                    st.warning(
+                        text["test_generation_partial_warning"].format(
+                            parsed=len(parsed_questions), requested=int(num_questions)
+                        )
+                    )
+
+            generated_questions = st.session_state.get("generated_test_questions")
+            if generated_questions:
+                st.write(f"**{text['test_preview_header']}**")
+                for index, question in enumerate(generated_questions, start=1):
+                    st.write(f"{text['question_label']} {index}: {question['question_text']}")
+                    st.write(f"A) {question['option_a']}")
+                    st.write(f"B) {question['option_b']}")
+                    st.write(f"C) {question['option_c']}")
+                    st.write(f"D) {question['option_d']}")
+                    st.caption(f"{text['correct_answer_label']}: {question['correct_option']}")
+
+                if st.button(text["publish_test_button"], key="publish_test_button"):
+                    if not gen_test_title:
+                        st.error(text["signup_missing_fields_error"])
+                    else:
+                        exams.publish_test(
+                            st.session_state.username,
+                            st.session_state.generated_test_grade,
+                            st.session_state.generated_test_subject,
+                            gen_test_title,
+                            generated_questions,
+                        )
+                        st.success(text["test_published_message"])
+                        del st.session_state["generated_test_questions"]
+                        st.rerun()
+
+        st.subheader(text["published_tests_header"])
+        published_tests = exams.list_published_tests_for_teacher(st.session_state.username)
+        if not published_tests:
+            st.caption(text["no_published_tests_message"])
+        else:
+            for published_test in published_tests:
+                with st.expander(
+                    f"{published_test['title']} — {published_test['subject']} "
+                    f"({published_test['grade']})"
+                ):
+                    test_questions = exams.get_test_questions(published_test["id"])
+                    submissions = exams.list_submissions(published_test["id"])
+                    st.caption(f"{len(test_questions)} {text['question_label'].lower()}s")
+                    st.write(f"{text['submissions_label']}: {len(submissions)}")
+                    for submission in submissions:
+                        st.write(
+                            f"- {submission['student_username']}: "
+                            f"{submission['score']}/{submission['total']}"
+                        )
+                    if st.button(
+                        text["delete_test_button"], key=f"delete_published_{published_test['id']}"
+                    ):
+                        exams.delete_test(published_test["id"], st.session_state.username)
                         st.rerun()
 
 else:  # role == "student"
@@ -764,7 +1045,7 @@ else:  # role == "student"
 
             st.success(text["upload_success"].format(num_chunks=num_chunks_added))
 
-    else:  # screen == "chat"
+    elif screen == "chat":
         st.header(text["new_chat_header"])
         subject_links = current_user["subject_links"]
         if not subject_links:
@@ -861,3 +1142,73 @@ else:  # role == "student"
 
                 chat_storage.add_message(active_chat["id"], "user", student_message)
                 chat_storage.add_message(active_chat["id"], "assistant", tutor_reply)
+
+    else:  # screen == "tests"
+        st.header(text["available_tests_header"])
+        available_tests = exams.list_published_tests_for_student(st.session_state.username)
+
+        if not available_tests:
+            st.caption(text["no_available_tests_message"])
+        else:
+            for available_test in available_tests:
+                submission = exams.get_submission(
+                    available_test["id"], st.session_state.username
+                )
+                test_label = (
+                    f"{available_test['title']} — {available_test['subject']} "
+                    f"({available_test['grade']})"
+                )
+
+                if submission is not None:
+                    st.write(
+                        f"{test_label} — {text['test_completed_label']}: "
+                        f"{submission['score']}/{submission['total']}"
+                    )
+                    continue
+
+                with st.expander(test_label):
+                    taking_key = f"taking_test_{available_test['id']}"
+                    if not st.session_state.get(taking_key) and st.button(
+                        text["start_test_button"], key=f"start_{available_test['id']}"
+                    ):
+                        st.session_state[taking_key] = True
+
+                    if st.session_state.get(taking_key):
+                        test_questions = exams.get_test_questions(available_test["id"])
+                        selected_answers = {}
+                        for index, question in enumerate(test_questions, start=1):
+                            st.write(f"**{text['question_label']} {index}**: {question['question_text']}")
+                            options = {
+                                "A": question["option_a"],
+                                "B": question["option_b"],
+                                "C": question["option_c"],
+                                "D": question["option_d"],
+                            }
+                            choice_labels = [f"{letter}) {text_}" for letter, text_ in options.items()]
+                            chosen = st.radio(
+                                text["question_label"],
+                                options=choice_labels,
+                                key=f"answer_{available_test['id']}_{question['id']}",
+                                index=None,
+                                label_visibility="collapsed",
+                            )
+                            if chosen is not None:
+                                selected_answers[question["id"]] = chosen[0]
+
+                        if st.button(
+                            text["submit_answers_button"], key=f"submit_{available_test['id']}"
+                        ):
+                            if len(selected_answers) < len(test_questions):
+                                st.error(text["answer_missing_error"])
+                            else:
+                                result = exams.submit_test(
+                                    available_test["id"],
+                                    st.session_state.username,
+                                    selected_answers,
+                                )
+                                st.session_state[taking_key] = False
+                                st.success(
+                                    f"{text['your_score_label']}: "
+                                    f"{result['score']}/{result['total']}"
+                                )
+                                st.rerun()

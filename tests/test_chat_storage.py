@@ -35,3 +35,23 @@ def test_load_chats_returns_each_students_own_chats_only():
 
     ana_chats = chat_storage.load_chats("ana")
     assert len(ana_chats) == 1
+
+
+def test_create_chat_defaults_mode_to_none():
+    users.create_student("ana", "secret123", "1º ESO")
+    chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "system prompt text")
+
+    assert chat["mode"] is None
+    [loaded_chat] = chat_storage.load_chats("ana")
+    assert loaded_chat["mode"] is None
+
+
+def test_create_chat_persists_mode():
+    users.create_teacher("profesor_lopez", "secret123")
+    chat = chat_storage.create_chat(
+        "profesor_lopez", "3º ESO", "Matemáticas", "system prompt text", mode="analyze"
+    )
+
+    assert chat["mode"] == "analyze"
+    [loaded_chat] = chat_storage.load_chats("profesor_lopez")
+    assert loaded_chat["mode"] == "analyze"

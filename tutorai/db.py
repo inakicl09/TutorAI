@@ -96,11 +96,17 @@ def init_db() -> None:
                 PRIMARY KEY (student_username, teacher_username, grade, subject)
             );
 
+            -- `mode` is only meaningful for Logos chats ("draft" or
+            -- "analyze"); NULL for Socrates/Artemis chats. It's what lets
+            -- ongoing messages in an "analyze" chat keep using only the
+            -- baked-in student activity summary, never mixing in a
+            -- teacher's exam-material RAG context meant for drafting.
             CREATE TABLE IF NOT EXISTS chats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL REFERENCES users(username),
                 grade TEXT NOT NULL,
-                subject TEXT NOT NULL
+                subject TEXT NOT NULL,
+                mode TEXT
             );
 
             CREATE TABLE IF NOT EXISTS chat_messages (
@@ -113,14 +119,43 @@ def init_db() -> None:
             );
 
             -- A test/exam a teacher saved after drafting it with Logos
-            -- (see exams.py). `content` holds the saved draft text.
+            -- (see exams.py). `content` holds the saved freeform draft
+            -- text; `published_at` is set once a structured (multiple
+            -- choice) version of it has been published for students to
+            -- complete -- see test_questions and test_submissions below.
             CREATE TABLE IF NOT EXISTS tests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 teacher_username TEXT NOT NULL REFERENCES users(username),
                 grade TEXT NOT NULL,
                 subject TEXT NOT NULL,
                 title TEXT NOT NULL,
-                content TEXT
+                content TEXT,
+                published_at TEXT
+            );
+
+            -- One multiple-choice question belonging to a published test.
+            CREATE TABLE IF NOT EXISTS test_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id INTEGER NOT NULL REFERENCES tests(id),
+                position INTEGER NOT NULL,
+                question_text TEXT NOT NULL,
+                option_a TEXT NOT NULL,
+                option_b TEXT NOT NULL,
+                option_c TEXT NOT NULL,
+                option_d TEXT NOT NULL,
+                correct_option TEXT NOT NULL
+            );
+
+            -- A student's one attempt at a published test (one row per
+            -- student per test, enforced by the UNIQUE constraint).
+            CREATE TABLE IF NOT EXISTS test_submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id INTEGER NOT NULL REFERENCES tests(id),
+                student_username TEXT NOT NULL REFERENCES users(username),
+                submitted_at TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                total INTEGER NOT NULL,
+                UNIQUE (test_id, student_username)
             );
             """
         )
@@ -140,6 +175,19 @@ def init_db() -> None:
         ]
         if existing_test_columns and "content" not in existing_test_columns:
             connection.execute("ALTER TABLE tests ADD COLUMN content TEXT")
+
+        # Migration: older databases had a `tests` table without
+        # published_at, from before structured tests could be published.
+        if existing_test_columns and "published_at" not in existing_test_columns:
+            connection.execute("ALTER TABLE tests ADD COLUMN published_at TEXT")
+
+        # Migration: older databases were created before chats had a mode
+        # column (back when Logos only had one chat flavor).
+        existing_chat_columns = [
+            row["name"] for row in connection.execute("PRAGMA table_info(chats)")
+        ]
+        if "mode" not in existing_chat_columns:
+            connection.execute("ALTER TABLE chats ADD COLUMN mode TEXT")
 
         # Migration: older databases had users.class_id (the old homeroom
         # link) instead of users.homeroom_id. Copy the values across;

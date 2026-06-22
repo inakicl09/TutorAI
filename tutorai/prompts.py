@@ -31,8 +31,8 @@ GRADE_INSTRUCTIONS = {
 }
 
 LANGUAGE_INSTRUCTIONS = {
-    "es": "Responde siempre al estudiante en español.",
-    "en": "Always respond to the student in English.",
+    "es": "Responde siempre en español.",
+    "en": "Always respond in English.",
 }
 
 SUBJECT_FOCUS = {
@@ -115,6 +115,55 @@ def build_logos_system_prompt(grade: str, subject: str, language: str) -> str:
     )
 
 
+def build_logos_analysis_prompt(
+    grade: str, subject: str, language: str, activity_summary: str
+) -> str:
+    """Combine the subject's focus and grade calibration into a system
+    prompt for Logos in "analyze student struggles" mode -- unlike the
+    test-drafting mode, this one has a snapshot of the class's recent
+    chat activity baked in, since that's what it should base its
+    analysis on rather than general knowledge of the subject."""
+    subject_focus = SUBJECT_FOCUS[subject]
+    return (
+        f'You are Logos, an assistant that helps a teacher see where '
+        f'their students are struggling in "{subject}", for Spanish '
+        f"secondary school students. {subject_focus}\n\n"
+        "Rules you must always follow:\n"
+        "- Base your analysis only on the student activity provided below "
+        "-- don't invent struggles that aren't reflected in it.\n"
+        "- Point out specific, recurring patterns (topics, types of "
+        "mistakes, repeated questions) rather than vague generalities.\n"
+        "- Suggest concrete next steps the teacher could take (e.g. which "
+        "topics to review, or which students may need extra support).\n"
+        "- If the activity provided is too thin to draw a conclusion, say "
+        "so plainly instead of guessing.\n\n"
+        f"{GRADE_INSTRUCTIONS[grade]}\n"
+        f"{LANGUAGE_INSTRUCTIONS[language]}\n\n"
+        "Here is the recent chat activity from students in this class:\n\n"
+        f"{activity_summary}"
+    )
+
+
+def build_artemis_system_prompt(language: str) -> str:
+    """System prompt for Artemis, the admin-facing assistant. Unlike
+    Socrates/Logos, Artemis isn't tied to a grade or subject -- it helps
+    with running the platform itself."""
+    return (
+        "You are Artemis, an assistant that helps the administrator of "
+        "TutorAI, a Socratic tutoring platform for Spanish secondary "
+        "school students. Help them think through questions about "
+        "managing users, organizing classes and homerooms, and using the "
+        "platform effectively.\n\n"
+        "Rules you must always follow:\n"
+        "- Be direct and practical; this is an administrator, not a "
+        "student, so give complete answers rather than guiding questions.\n"
+        "- If a question requires data you don't have (e.g. exact current "
+        "user counts), say so instead of guessing, and suggest where in "
+        "the admin dashboard they could find it.\n\n"
+        f"{LANGUAGE_INSTRUCTIONS[language]}"
+    )
+
+
 def build_context_prompt(retrieved_chunks: list[str]) -> str:
     """Turn retrieved document chunks into a short context block the tutor
     can use when asking questions."""
@@ -125,4 +174,54 @@ def build_context_prompt(retrieved_chunks: list[str]) -> str:
     return (
         "Here is some material from the student's course documents that "
         "may be relevant:\n\n" + joined_chunks
+    )
+
+
+def build_material_context_prompt(retrieved_chunks: list[str]) -> str:
+    """Turn retrieved chunks from a teacher's uploaded exam material into
+    a context block for Logos. Worded for the teacher-facing case --
+    build_context_prompt's wording ("the student's course documents")
+    would be confusing here, since this is the teacher's own material."""
+    if not retrieved_chunks:
+        return ""
+
+    joined_chunks = "\n\n".join(retrieved_chunks)
+    return (
+        "Here is material the teacher uploaded as a reference for this "
+        "exam. Base the exam's questions on this content:\n\n" + joined_chunks
+    )
+
+
+QUESTION_SEPARATOR = "###"
+
+
+def build_structured_test_prompt(
+    grade: str, subject: str, language: str, num_questions: int, material_context: str = ""
+) -> str:
+    """Prompt for one-shot generation of a multiple-choice test in a
+    strict, machine-parseable format (see exams.parse_structured_test).
+    Unlike Logos's other modes, this isn't an ongoing chat -- the output
+    format must be followed exactly so the test can be published for
+    students to complete."""
+    subject_focus = SUBJECT_FOCUS[subject]
+    material_section = f"\n\n{material_context}" if material_context else ""
+    return (
+        f'You are Logos, generating a {num_questions}-question multiple '
+        f'choice test for the subject "{subject}", for Spanish secondary '
+        f"school students. {subject_focus}\n\n"
+        f"{GRADE_INSTRUCTIONS[grade]}\n"
+        f"{LANGUAGE_INSTRUCTIONS[language]}\n\n"
+        "You MUST format your entire response using exactly this "
+        "structure, with no extra commentary before, between, or after "
+        "the questions:\n\n"
+        "QUESTION: <the question text>\n"
+        "A) <option>\n"
+        "B) <option>\n"
+        "C) <option>\n"
+        "D) <option>\n"
+        "CORRECT: <the letter of the correct option -- just A, B, C, or D>\n"
+        f"{QUESTION_SEPARATOR}\n\n"
+        f"Repeat that exact block for each of the {num_questions} questions, "
+        f"separated by '{QUESTION_SEPARATOR}' on its own line."
+        f"{material_section}"
     )

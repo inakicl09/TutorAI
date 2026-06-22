@@ -92,6 +92,9 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   curriculum names, shown as-is regardless of UI language).
 - `rag.py` — PDF ingestion (chunk + embed with `nomic-embed-text` via
   Ollama) and retrieval, persisted in chromaDB at `data/chroma_db`.
+  Takes an optional `collection_name`: student course material uses the
+  default collection, teacher exam material uses a separate one
+  (`TEACHER_MATERIALS_COLLECTION`), so the two can never mix.
 - `chat.py` — calls Ollama's `/api/chat`, combines retrieved chunks into
   the prompt context, lists available models via `/api/tags` (filtering
   out the embedding-only model since it can't chat). `is_ollama_installed()`
@@ -100,12 +103,13 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   message can point to https://ollama.com/download specifically when
   needed. `tutor.py` duplicates this one check (not the rest of chat.py)
   to stay independent of `rag.py`'s heavier imports.
-- `chat_storage.py` — `create_chat(...)` inserts a chat + its system
-  message, `add_message(chat_id, role, content)` appends one message,
-  `load_chats(username)` rebuilds full history per chat. All SQLite, all
-  on `db.py`. Reused as-is for both Socrates (student) and Logos
-  (teacher) conversations -- the schema doesn't care which role owns a
-  chat, so no changes were needed to support Logos.
+- `chat_storage.py` — `create_chat(..., mode=None)` inserts a chat + its
+  system message (`mode` is "draft"/"analyze" for Logos chats, NULL
+  otherwise), `add_message(chat_id, role, content)` appends one message,
+  `load_chats(username)` rebuilds full history per chat (`mode` included).
+  All SQLite, all on `db.py`. Reused as-is for both Socrates (student)
+  and Logos (teacher) conversations -- the schema doesn't care which
+  role owns a chat, so no changes were needed to support Logos.
 - `exams.py` — `save_test`/`list_tests_for_teacher`/`delete_test` on the
   `tests` table (now has a `content` column, migrated in `db.py`).
   Deliberately not named `tests.py`, so it doesn't read like the
@@ -122,20 +126,60 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     grade+subject combos they're linked to, model picker, the
     conversation itself — each message saved immediately via
     `chat_storage`), *Link teacher* (search by username or join code),
-    *Material* (PDF upload for RAG).
+    *Material* (PDF upload for RAG), *Exámenes* (every published test
+    for a class they're linked to: "Start test" renders the multiple-
+    choice questions with radio buttons, "Submit" grades immediately via
+    `exams.submit_test` and shows the score; one attempt per student per
+    test, enforced by a UNIQUE constraint on `test_submissions`. Already-
+    completed tests just show the stored score instead of the form).
   - **teacher** (Logos): *Main menu* (welcome, join code, classes-taught/
     students-linked/tests-saved stats), *Supervise students* (read-only
     view of every linked student's chats, with message-count and
     last-active per student), *My classes* (add/list `(grade, subject)`
-    teaching assignments), *Tests* (chat with Logos —
-    `prompts.build_logos_system_prompt` / `chat.ask_logos`, no RAG —
-    then "Save as test" persists the latest reply via
-    `exams.save_test`; saved tests listed below with delete buttons).
+    teaching assignments), *Logos* (sidebar tab; was "Tests" until the
+    user pointed out it should say the assistant's name):
+    - A PDF uploader for exam material (own chromaDB collection,
+      `rag.TEACHER_MATERIALS_COLLECTION`, kept separate from students'
+      course material so exam content can never leak into a student's
+      tutoring session). Worded with `prompts.build_material_context_prompt`
+      (not `build_context_prompt`, which says "the student's course
+      documents" -- wrong framing for a teacher's own material).
+    - An open-ended chat with a mode switch when starting a new one:
+      "Draft a test" (`prompts.build_logos_system_prompt`, then an
+      auto-sent opening message via `chat.ask_logos_with_material` so
+      the teacher sees a generated exam immediately instead of an empty
+      chat) or "Analyze student struggles" (`build_class_activity_summary`
+      gathers the linked students' chat history for that class, baked
+      into `prompts.build_logos_analysis_prompt`, opening message via
+      plain `chat.ask_assistant`). Each chat's `mode` ("draft"/"analyze")
+      is persisted on the `chats` row and checked on every later message
+      too, so an "analyze" chat never mixes in exam-material RAG context
+      meant only for drafting, and a "draft" chat keeps using it.
+      "Save as test" persists the latest reply as freeform text via
+      `exams.save_test` -- good for printing, not completable by
+      students.
+    - A separate "Generate a test for your students" flow: pick a class
+      and a question count, `chat.generate_structured_test` makes a
+      *one-shot* call (not part of the chat above) using
+      `prompts.build_structured_test_prompt`, a strict QUESTION/A-D/CORRECT
+      format with a literal `###` separator between questions, parsed by
+      `exams.parse_structured_test` (regex-based, tolerant of stray
+      whitespace; returns whatever it can find, since a small local
+      model doesn't always comply perfectly -- the UI shows "N of M
+      parsed" so the teacher can just regenerate if too few came back).
+      The parsed preview can then be published (`exams.publish_test`),
+      which creates `test_questions` rows and makes the test visible to
+      every student linked to that teacher for that grade+subject.
+      Published tests are listed with live submission counts/scores.
   - **admin** (Artemis): *Main menu* (total students/teachers/classes/
     homerooms stats), *Add user* (student or teacher), *Teachers* menu
     (filter by grade, search by username), *Students* menu (filter by
     grade, filter by class, search by username — filters apply together
-    with AND logic). Teacher/student entries show full teaching/link
+    with AND logic), *Artemis* (a single persistent chat, no RAG, no
+    grade/subject — `prompts.build_artemis_system_prompt` /
+    `chat.ask_assistant`; the chats table needs a non-null grade/subject
+    so this uses the sentinel values `"Admin"`/`"Artemis"`, set once in
+    `app.py`). Teacher/student entries show full teaching/link
     lists (with per-link remove buttons and an admin-initiated link
     form), the actual password (see the security note below), plus
     shared password-change and delete-with-confirm controls
@@ -238,10 +282,39 @@ confirming `./run.sh` still starts cleanly.
   for its conversations -- same `chats`/`chat_messages` tables as
   Socrates, just owned by a teacher's username instead of a student's,
   since the schema never assumed a role. `chat.py`'s Ollama-call plumbing
-  was factored into a shared `_call_ollama_chat` helper so `ask_logos`
+  was factored into a shared `_call_ollama_chat` helper so `ask_assistant`
   doesn't duplicate `ask_tutor`'s request/response handling -- it just
   skips the RAG step entirely, per the earlier explicit instruction not
   to add RAG for teachers/admin yet.
+- Artemis was originally just a display name (`config.ASSISTANT_NAMES`)
+  with no chat behind it -- the user clarified all three names are
+  meant to be actual AI assistants, so Artemis got the same base chat
+  architecture as Logos (`chat.ask_assistant`, no RAG), renamed from
+  `ask_logos` since the function was already role-agnostic. Unlike
+  Socrates/Logos, Artemis isn't tied to a grade+subject (admin manages
+  the whole platform, not one class), so it gets exactly one persistent
+  chat instead of a switchable list.
+- Logos's "analyze student struggles" mode is a second system prompt
+  (`build_logos_analysis_prompt`), not a tool-calling agent -- the
+  linked students' chat transcripts for that class are gathered once at
+  chat-creation time (`build_class_activity_summary` in `app.py`,
+  capped at `MAX_ACTIVITY_SUMMARY_LENGTH` chars as a simple context-
+  window guard) and baked directly into the system prompt, then Logos
+  is immediately asked an auto-sent opening question so the teacher sees
+  a result without having to prompt it first.
+- Teacher-uploaded exam material is RAG, but deliberately kept in its
+  own chromaDB collection rather than the shared student one -- the
+  earlier "no RAG for teachers yet" deferral was about not mixing this
+  in carelessly, not about avoiding RAG forever.
+- `chats.mode` ("draft"/"analyze", NULL for non-Logos chats) was added
+  after the user pointed out that "analyze" chats should rely only on
+  the baked-in student activity summary, never mix in a teacher's
+  exam-material RAG context -- initially both Logos modes shared
+  `ask_logos_with_material` for ongoing messages on the assumption that
+  an empty/irrelevant retrieval is harmless, but that still meant
+  drafting material could surface mid-analysis. Now ongoing messages
+  check `chat["mode"]` and only "draft" (or legacy chats predating this
+  column) get the RAG-enabled path.
 - Moved all modules from flat root-level files into a `tutorai/` package
   plus a `tests/` directory with `pytest` coverage (user's explicit
   choice, 2026-06-20, overriding `AGENTS.md`'s earlier "keep it flat, no
@@ -249,6 +322,23 @@ confirming `./run.sh` still starts cleanly.
   Entry-point scripts are now run as `python3 -m tutorai.<name>`, and the
   Streamlit app as `python -m streamlit run tutorai/app.py`, instead of
   as bare scripts, so the package's absolute imports resolve.
+- `chat.generate_structured_test` sends its prompt as a `role: "user"`
+  message, not `role: "system"` with no user turn at all -- discovered
+  by manual testing that Mistral via Ollama completely ignores format
+  instructions in a system-only conversation and emits unrelated
+  training-data-like snippets instead (e.g. random algebra word
+  problems), even though the *exact same text* sent as a user message
+  reliably produces well-formatted output. `ask_assistant` and
+  `ask_logos_with_material` were unaffected since they always have at
+  least one prior user turn in the conversation by the time they're
+  called.
+- Structured tests are multiple-choice only and one-shot generated (not
+  part of the open-ended Logos chat above), per the user's choice, since
+  a strict parseable format is much more reliable to get from a small
+  local model as a single dedicated call than as part of free-flowing
+  conversation. `exams.parse_structured_test` is deliberately tolerant
+  (returns whatever it can parse rather than raising) since the model
+  still occasionally undershoots the requested question count.
 
 ## Known gotcha (db.py / users.py / chat_storage.py)
 
@@ -292,12 +382,18 @@ Practical implications to keep in mind:
 - Deleting/renaming chats (test chats included). (Unlinking a student
   from a teacher is now built — admin's Students menu has a remove
   button per link.)
-- RAG for Logos (teacher/admin) — explicitly deferred by the user; only
-  Socrates (student) searches uploaded course documents right now.
-- No structured test format (questions/answers as separate fields) —
-  a saved test is just the freeform text of Logos's last reply. Good
-  enough for drafting/printing, not for building an auto-graded
-  student-facing test-taking feature later.
+- RAG for Artemis (admin) — explicitly deferred by the user; Logos
+  (teacher) got it once the user asked for exam-material upload, but
+  Artemis still has none.
+- Multiple-choice only for published/auto-graded tests (per the user's
+  choice) — Logos's freeform "Draft a test" mode can still produce mixed
+  question types (short answer, open-ended), but those stay
+  print-only via `exams.save_test`, not completable in the app.
+- No per-question review for teachers — the published-tests list shows
+  each student's total score, not which specific questions they missed.
+- No way to un-publish a test or let a student retake one — one
+  attempt per student per test, enforced at the DB level
+  (`test_submissions` UNIQUE constraint), with no override path yet.
 - Self-service password reset still doesn't exist, but admin can now
   reset any user's password from the dashboard as a workaround.
 - Admin can't change a user's role (e.g. promote student to teacher) or

@@ -13,16 +13,22 @@ def _now() -> str:
 
 
 def create_chat(
-    username: str, grade: str, subject: str, system_prompt: str, created_at: Optional[str] = None
+    username: str,
+    grade: str,
+    subject: str,
+    system_prompt: str,
+    created_at: Optional[str] = None,
+    mode: Optional[str] = None,
 ) -> dict:
     """Start a new chat for this student and return it, system message
-    included."""
+    included. `mode` is only meaningful for Logos chats ("draft" or
+    "analyze") -- leave it None for Socrates/Artemis chats."""
     created_at = created_at or _now()
     connection = db.get_connection()
     try:
         cursor = connection.execute(
-            "INSERT INTO chats (username, grade, subject) VALUES (?, ?, ?)",
-            (username, grade, subject),
+            "INSERT INTO chats (username, grade, subject, mode) VALUES (?, ?, ?, ?)",
+            (username, grade, subject, mode),
         )
         chat_id = cursor.lastrowid
         connection.execute(
@@ -35,6 +41,7 @@ def create_chat(
             "id": chat_id,
             "grade": grade,
             "subject": subject,
+            "mode": mode,
             "history": [{"role": "system", "content": system_prompt, "created_at": created_at}],
         }
     finally:
@@ -66,7 +73,7 @@ def load_chats(username: str) -> list[dict]:
     connection = db.get_connection()
     try:
         chat_rows = connection.execute(
-            "SELECT id, grade, subject FROM chats WHERE username = ? ORDER BY id",
+            "SELECT id, grade, subject, mode FROM chats WHERE username = ? ORDER BY id",
             (username,),
         ).fetchall()
 
@@ -82,6 +89,7 @@ def load_chats(username: str) -> list[dict]:
                     "id": chat_row["id"],
                     "grade": chat_row["grade"],
                     "subject": chat_row["subject"],
+                    "mode": chat_row["mode"],
                     "history": [dict(row) for row in message_rows],
                 }
             )
