@@ -157,6 +157,19 @@ def init_db() -> None:
                 total INTEGER NOT NULL,
                 UNIQUE (test_id, student_username)
             );
+
+            -- One flashcard per question a student got wrong on a test,
+            -- created automatically at submission time (see
+            -- exams.submit_test). No LLM involved -- the question text
+            -- and correct option are already right there.
+            CREATE TABLE IF NOT EXISTS flashcards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_username TEXT NOT NULL REFERENCES users(username),
+                test_id INTEGER NOT NULL REFERENCES tests(id),
+                question_text TEXT NOT NULL,
+                correct_answer_text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
 

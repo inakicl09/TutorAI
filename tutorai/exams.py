@@ -65,7 +65,8 @@ def list_tests_for_teacher(teacher_username: str) -> list[dict]:
 
 def delete_test(test_id: int, teacher_username: str) -> None:
     """Delete a test (freeform or published), but only if it belongs to
-    this teacher. Also removes its questions and any submissions."""
+    this teacher. Also removes its questions, submissions, and any
+    flashcards students were given from it."""
     connection = db.get_connection()
     try:
         owned = connection.execute(
@@ -77,6 +78,7 @@ def delete_test(test_id: int, teacher_username: str) -> None:
 
         connection.execute("DELETE FROM test_submissions WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM test_questions WHERE test_id = ?", (test_id,))
+        connection.execute("DELETE FROM flashcards WHERE test_id = ?", (test_id,))
         connection.execute(
             "DELETE FROM tests WHERE id = ? AND teacher_username = ?",
             (test_id, teacher_username),
@@ -221,31 +223,74 @@ def get_submission(test_id: int, student_username: str) -> Optional[dict]:
         connection.close()
 
 
+_OPTION_COLUMNS = {"A": "option_a", "B": "option_b", "C": "option_c", "D": "option_d"}
+
+
 def submit_test(test_id: int, student_username: str, answers: dict) -> dict:
     """Grade a student's answers (question_id -> selected letter) against
-    the test's correct options, store the one allowed attempt, and
-    return {"score": ..., "total": ...}. Raises ValueError if the student
-    already completed this test."""
+    the test's correct options, store the one allowed attempt, create a
+    flashcard for every question they got wrong (see flashcards.py-style
+    helpers below), and return {"score": ..., "total": ...}. Raises
+    ValueError if the student already completed this test."""
     if get_submission(test_id, student_username) is not None:
         raise ValueError("Student already submitted this test")
 
     questions = get_test_questions(test_id)
     total = len(questions)
-    score = sum(
-        1
-        for question in questions
-        if answers.get(question["id"]) == question["correct_option"]
-    )
+    score = 0
+    wrong_questions = []
+    for question in questions:
+        if answers.get(question["id"]) == question["correct_option"]:
+            score += 1
+        else:
+            wrong_questions.append(question)
 
+    now = datetime.now(timezone.utc).isoformat()
     connection = db.get_connection()
     try:
         connection.execute(
             "INSERT INTO test_submissions (test_id, student_username, submitted_at, score, total) "
             "VALUES (?, ?, ?, ?, ?)",
-            (test_id, student_username, datetime.now(timezone.utc).isoformat(), score, total),
+            (test_id, student_username, now, score, total),
         )
+        for question in wrong_questions:
+            correct_answer_text = question[_OPTION_COLUMNS[question["correct_option"]]]
+            connection.execute(
+                "INSERT INTO flashcards "
+                "(student_username, test_id, question_text, correct_answer_text, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (student_username, test_id, question["question_text"], correct_answer_text, now),
+            )
         connection.commit()
     finally:
         connection.close()
 
     return {"score": score, "total": total}
+
+
+def list_flashcards_for_student(student_username: str) -> list[dict]:
+    """Return a student's flashcards, newest first."""
+    connection = db.get_connection()
+    try:
+        rows = connection.execute(
+            "SELECT id, test_id, question_text, correct_answer_text FROM flashcards "
+            "WHERE student_username = ? ORDER BY id DESC",
+            (student_username,),
+        )
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def delete_flashcard(flashcard_id: int, student_username: str) -> None:
+    """Remove a flashcard, but only if it belongs to this student (e.g.
+    once they feel confident with it)."""
+    connection = db.get_connection()
+    try:
+        connection.execute(
+            "DELETE FROM flashcards WHERE id = ? AND student_username = ?",
+            (flashcard_id, student_username),
+        )
+        connection.commit()
+    finally:
+        connection.close()

@@ -140,3 +140,72 @@ def test_delete_test_removes_questions_and_submissions():
 
     assert exams.get_test_questions(test_id) == []
     assert exams.list_published_tests_for_student("ana") == []
+
+
+def test_submit_test_creates_a_flashcard_for_each_wrong_answer():
+    _link_student_and_teacher()
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+    questions = exams.get_test_questions(test_id)
+
+    # get the first question right, the second wrong
+    answers = {
+        questions[0]["id"]: questions[0]["correct_option"],
+        questions[1]["id"]: "A" if questions[1]["correct_option"] != "A" else "B",
+    }
+    exams.submit_test(test_id, "ana", answers)
+
+    flashcards = exams.list_flashcards_for_student("ana")
+    assert len(flashcards) == 1
+    assert flashcards[0]["question_text"] == questions[1]["question_text"]
+    correct_letter = questions[1]["correct_option"]
+    expected_answer_text = questions[1][exams._OPTION_COLUMNS[correct_letter]]
+    assert flashcards[0]["correct_answer_text"] == expected_answer_text
+
+
+def test_submit_test_creates_no_flashcards_for_a_perfect_score():
+    _link_student_and_teacher()
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+    questions = exams.get_test_questions(test_id)
+    answers = {q["id"]: q["correct_option"] for q in questions}
+
+    exams.submit_test(test_id, "ana", answers)
+
+    assert exams.list_flashcards_for_student("ana") == []
+
+
+def test_delete_flashcard_only_removes_the_owning_students_card():
+    _link_student_and_teacher()
+    users.create_student("luis", "secret123", "3º ESO")
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+    questions = exams.get_test_questions(test_id)
+    answers = {q["id"]: q["correct_option"] for q in questions}
+    answers[questions[0]["id"]] = "A" if questions[0]["correct_option"] != "A" else "B"
+    exams.submit_test(test_id, "ana", answers)
+    flashcard_id = exams.list_flashcards_for_student("ana")[0]["id"]
+
+    exams.delete_flashcard(flashcard_id, "luis")
+    assert len(exams.list_flashcards_for_student("ana")) == 1
+
+    exams.delete_flashcard(flashcard_id, "ana")
+    assert exams.list_flashcards_for_student("ana") == []
+
+
+def test_delete_test_also_removes_flashcards():
+    _link_student_and_teacher()
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+    questions = exams.get_test_questions(test_id)
+    answers = {q["id"]: q["correct_option"] for q in questions}
+    answers[questions[0]["id"]] = "A" if questions[0]["correct_option"] != "A" else "B"
+    exams.submit_test(test_id, "ana", answers)
+
+    exams.delete_test(test_id, "profesor_lopez")
+
+    assert exams.list_flashcards_for_student("ana") == []

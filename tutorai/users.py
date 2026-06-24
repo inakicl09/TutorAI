@@ -314,6 +314,24 @@ def unlink_student_from_teacher(
         connection.close()
 
 
+def move_student_link(
+    student_username: str,
+    old_teacher_username: str,
+    old_grade: str,
+    old_subject: str,
+    new_teacher_username: str,
+    new_grade: str,
+    new_subject: str,
+) -> None:
+    """Move a student from one class to another. Used by the admin
+    dashboard. Links the new class first (so an invalid target leaves
+    the old link intact instead of losing both) and only then removes
+    the old one. Raises ValueError if the new class isn't valid for
+    this student (see link_student_to_teacher)."""
+    link_student_to_teacher(student_username, new_teacher_username, new_grade, new_subject)
+    unlink_student_from_teacher(student_username, old_teacher_username, old_grade, old_subject)
+
+
 def students_linked_to_teacher(teacher_username: str) -> list[str]:
     """List student usernames linked to this teacher for any subject."""
     connection = db.get_connection()
@@ -453,6 +471,7 @@ def delete_user(username: str) -> None:
         connection.execute(
             "DELETE FROM test_submissions WHERE student_username = ?", (username,)
         )
+        connection.execute("DELETE FROM flashcards WHERE student_username = ?", (username,))
         test_ids = [
             row["id"]
             for row in connection.execute(
@@ -462,6 +481,7 @@ def delete_user(username: str) -> None:
         for test_id in test_ids:
             connection.execute("DELETE FROM test_questions WHERE test_id = ?", (test_id,))
             connection.execute("DELETE FROM test_submissions WHERE test_id = ?", (test_id,))
+            connection.execute("DELETE FROM flashcards WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM tests WHERE teacher_username = ?", (username,))
 
         connection.execute("DELETE FROM users WHERE username = ?", (username,))

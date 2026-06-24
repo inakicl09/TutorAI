@@ -51,8 +51,17 @@ def add_pdf_to_vector_store(pdf_path: str, collection_name: Optional[str] = None
 
 
 def retrieve_relevant_chunks(question: str, collection_name: Optional[str] = None) -> list[str]:
-    """Find the document chunks most relevant to the question."""
+    """Find the document chunks most relevant to the question.
+
+    Skips loading the embedding model entirely if the collection has no
+    documents yet -- there's nothing to search, so there's no reason to
+    pay for an embedding call (meaningful on memory-constrained machines
+    running a local LLM at the same time).
+    """
     vector_store = get_vector_store(collection_name)
+    if vector_store._collection.count() == 0:
+        return []
+
     results = vector_store.similarity_search(
         question, k=config.NUM_CHUNKS_TO_RETRIEVE
     )

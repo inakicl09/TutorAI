@@ -137,6 +137,43 @@ def test_unlink_student_from_teacher_removes_only_that_link():
     ]
 
 
+def test_move_student_link_links_new_and_unlinks_old():
+    users.create_student("ana", "secret123", "3º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.create_teacher("profesora_garcia", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "3º ESO", "Matemáticas")
+    users.add_teaching_assignment("profesora_garcia", "3º ESO", "Matemáticas")
+    users.link_student_to_teacher("ana", "profesor_lopez", "3º ESO", "Matemáticas")
+
+    users.move_student_link(
+        "ana", "profesor_lopez", "3º ESO", "Matemáticas", "profesora_garcia", "3º ESO", "Matemáticas"
+    )
+
+    student = users.get_user("ana")
+    assert student["subject_links"] == [
+        {"grade": "3º ESO", "subject": "Matemáticas", "teacher": "profesora_garcia"}
+    ]
+
+
+def test_move_student_link_keeps_old_link_when_new_target_is_invalid():
+    users.create_student("ana", "secret123", "3º ESO")
+    users.create_teacher("profesor_lopez", "secret123")
+    users.create_teacher("profesora_garcia", "secret123")
+    users.add_teaching_assignment("profesor_lopez", "3º ESO", "Matemáticas")
+    users.link_student_to_teacher("ana", "profesor_lopez", "3º ESO", "Matemáticas")
+
+    with pytest.raises(ValueError):
+        # profesora_garcia doesn't teach this grade+subject
+        users.move_student_link(
+            "ana", "profesor_lopez", "3º ESO", "Matemáticas", "profesora_garcia", "3º ESO", "Matemáticas"
+        )
+
+    student = users.get_user("ana")
+    assert student["subject_links"] == [
+        {"grade": "3º ESO", "subject": "Matemáticas", "teacher": "profesor_lopez"}
+    ]
+
+
 def test_list_all_users_excludes_password_data():
     users.create_student("ana", "secret123", "1º ESO")
 

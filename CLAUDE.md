@@ -3,6 +3,17 @@
 See `AGENTS.md` for coding style/conventions. This file tracks what's been
 built and the current state of the project, for picking up work later.
 
+## ⚠️ TEMPORARY: dev-only login shortcut
+
+`app.py`'s login screen has a "log in as any user, no password" dropdown
+below the normal login/signup form, clearly marked with
+`# --- TEMPORARY ---` comments in the code. The user explicitly asked
+for this purely for testing different roles quickly, and said to remove
+it once the project is finished. **Remove that block (and the
+`dev_login_*` translation keys) before any real deployment** — anyone
+who opens the app can otherwise log in as anyone, including Admin,
+without a password.
+
 ## What this is
 
 A Socratic tutoring app for Spanish secondary school students (1º ESO to
@@ -131,7 +142,11 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     choice questions with radio buttons, "Submit" grades immediately via
     `exams.submit_test` and shows the score; one attempt per student per
     test, enforced by a UNIQUE constraint on `test_submissions`. Already-
-    completed tests just show the stored score instead of the form).
+    completed tests just show the stored score instead of the form),
+    *Tarjetas* (flashcards): one auto-created per wrong answer at
+    submission time (`exams.submit_test`, no LLM involved -- just the
+    question text + the correct option's text), with a reveal-then-"Got
+    it" flow that deletes the card once the student feels confident.
   - **teacher** (Logos): *Main menu* (welcome, join code, classes-taught/
     students-linked/tests-saved stats), *Supervise students* (read-only
     view of every linked student's chats, with message-count and
@@ -339,6 +354,27 @@ confirming `./run.sh` still starts cleanly.
   conversation. `exams.parse_structured_test` is deliberately tolerant
   (returns whatever it can parse rather than raising) since the model
   still occasionally undershoots the requested question count.
+- Flashcards are generated deterministically (question text + the
+  correct option's text), not via another LLM call -- per the user's
+  ask, and also because the machine running this (8GB RAM, no dedicated
+  GPU) is already tight on resources for one local model at a time; see
+  the performance note below.
+
+## Known gotcha: hardware constraints on local generation
+
+This machine has 8GB RAM and no dedicated GPU (Apple M2, unified
+memory). Running Mistral (~5.3GB loaded) is already a significant
+fraction of that, so layering on a second model concurrently is
+expensive. `rag.retrieve_relevant_chunks` now checks
+`vector_store._collection.count()` and returns `[]` immediately if a
+collection is empty, skipping the embedding model load entirely instead
+of paying for it on every call when there's nothing to search (this cut
+`generate_structured_test`'s time from ~56s to ~47s on this machine when
+no exam material had been uploaded). Generating a multiple-choice test
+still reliably takes 30-60+ seconds even after that fix -- this is
+inherent to running a 7B model on this hardware, not a code bug. If
+generation feels like it's hanging, it's very likely still running
+rather than stuck; `ollama ps` can confirm a model is actively loaded.
 
 ## Known gotcha (db.py / users.py / chat_storage.py)
 

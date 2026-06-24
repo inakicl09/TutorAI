@@ -102,6 +102,21 @@ if st.session_state.username is None:
                 st.session_state.username = username_input
                 st.rerun()
 
+    # --- TEMPORARY: remove this block once the project is finished ---
+    # Lets you log in as any existing user without a password, purely
+    # for testing different roles quickly.
+    st.divider()
+    st.warning(text["dev_login_warning"])
+    all_usernames = [u["username"] for u in users.list_all_users()]
+    if all_usernames:
+        dev_login_username = st.selectbox(
+            text["dev_login_label"], options=all_usernames, key="dev_login_username"
+        )
+        if st.button(text["dev_login_button"], key="dev_login_button"):
+            st.session_state.username = dev_login_username
+            st.rerun()
+    # --- END TEMPORARY ---
+
     st.stop()
 
 current_user = users.get_user(st.session_state.username)
@@ -129,6 +144,7 @@ SCREENS_BY_ROLE = {
         ("link_teacher", "screen_link_teacher"),
         ("material", "screen_material"),
         ("tests", "screen_student_tests"),
+        ("flashcards", "screen_flashcards"),
     ],
 }
 
@@ -319,6 +335,25 @@ if role == "admin":
                                 f"— {student_count} {text['admin_students_menu_header'].lower()}"
                             )
 
+                    st.write(f"**{text['add_teaching_header']}**")
+                    admin_add_class_grade = st.selectbox(
+                        text["grade_label"],
+                        options=subjects.GRADES,
+                        key=f"admin_add_class_grade_{teacher_username}",
+                    )
+                    admin_add_class_subject = st.selectbox(
+                        text["subject_label"],
+                        options=subjects.GRADE_SUBJECTS[admin_add_class_grade],
+                        key=f"admin_add_class_subject_{teacher_username}",
+                    )
+                    if st.button(
+                        text["add_teaching_button"], key=f"admin_add_class_button_{teacher_username}"
+                    ):
+                        users.add_teaching_assignment(
+                            teacher_username, admin_add_class_grade, admin_add_class_subject
+                        )
+                        st.rerun()
+
                     render_change_password_and_delete(teacher_username, text)
 
     elif screen == "students":
@@ -377,17 +412,25 @@ if role == "admin":
                         st.caption(text["no_links_message"])
                     else:
                         for link in student_record["subject_links"]:
-                            link_col, remove_col = st.columns([4, 1])
+                            link_base_key = (
+                                f"{student_username}_{link['teacher']}_"
+                                f"{link['grade']}_{link['subject']}"
+                            )
+                            moving_key = f"moving_link_{link_base_key}"
+                            link_col, move_col, remove_col = st.columns([3, 1, 1])
                             with link_col:
                                 st.write(
                                     f"- {link['subject']} ({link['grade']}) — {link['teacher']}"
                                 )
+                            with move_col:
+                                if st.button(
+                                    text["move_link_button"], key=f"move_{link_base_key}"
+                                ):
+                                    st.session_state[moving_key] = True
                             with remove_col:
-                                remove_key = (
-                                    f"unlink_{student_username}_{link['teacher']}_"
-                                    f"{link['grade']}_{link['subject']}"
-                                )
-                                if st.button(text["remove_link_button"], key=remove_key):
+                                if st.button(
+                                    text["remove_link_button"], key=f"unlink_{link_base_key}"
+                                ):
                                     users.unlink_student_from_teacher(
                                         student_username,
                                         link["teacher"],
@@ -396,6 +439,53 @@ if role == "admin":
                                     )
                                     st.success(text["link_removed_message"])
                                     st.rerun()
+
+                            if st.session_state.get(moving_key):
+                                move_target_teachers = [
+                                    u["username"] for u in users.list_all_users(role="teacher")
+                                ]
+                                move_chosen_teacher = st.selectbox(
+                                    text["move_to_label"],
+                                    options=move_target_teachers,
+                                    key=f"move_teacher_{link_base_key}",
+                                )
+                                move_teacher_teaching = users.get_user(move_chosen_teacher)[
+                                    "teaching"
+                                ]
+                                if not move_teacher_teaching:
+                                    st.caption(text["no_teaching_message"])
+                                else:
+                                    move_teaching_labels = [
+                                        f"{a['subject']} ({a['grade']})"
+                                        for a in move_teacher_teaching
+                                    ]
+                                    move_chosen_label = st.selectbox(
+                                        text["subject_label"],
+                                        options=move_teaching_labels,
+                                        key=f"move_subject_{link_base_key}",
+                                    )
+                                    move_chosen_assignment = move_teacher_teaching[
+                                        move_teaching_labels.index(move_chosen_label)
+                                    ]
+                                    if st.button(
+                                        text["confirm_move_button"],
+                                        key=f"confirm_move_{link_base_key}",
+                                    ):
+                                        try:
+                                            users.move_student_link(
+                                                student_username,
+                                                link["teacher"],
+                                                link["grade"],
+                                                link["subject"],
+                                                move_chosen_teacher,
+                                                move_chosen_assignment["grade"],
+                                                move_chosen_assignment["subject"],
+                                            )
+                                            st.session_state[moving_key] = False
+                                            st.success(text["link_moved_message"])
+                                            st.rerun()
+                                        except ValueError:
+                                            st.error(text["link_failed_error"])
 
                     st.write(f"**{text['add_link_header']}**")
                     all_teacher_usernames = [
@@ -600,7 +690,19 @@ elif role == "teacher":
             st.caption(text["no_teaching_message"])
         else:
             for assignment in current_user["teaching"]:
-                st.write(f"- {assignment['subject']} ({assignment['grade']})")
+                class_record = classes.get_or_create_class(
+                    st.session_state.username, assignment["grade"], assignment["subject"]
+                )
+                class_student_usernames = classes.students_in_class(class_record["id"])
+                with st.expander(
+                    f"{assignment['subject']} ({assignment['grade']}) — "
+                    f"{len(class_student_usernames)} {text['admin_students_menu_header'].lower()}"
+                ):
+                    if not class_student_usernames:
+                        st.caption(text["no_students_message"])
+                    else:
+                        for student_username in class_student_usernames:
+                            st.write(f"- {student_username}")
 
     else:  # screen == "tests"
         if not st.session_state.test_chats_loaded:
@@ -1143,7 +1245,7 @@ else:  # role == "student"
                 chat_storage.add_message(active_chat["id"], "user", student_message)
                 chat_storage.add_message(active_chat["id"], "assistant", tutor_reply)
 
-    else:  # screen == "tests"
+    elif screen == "tests":
         st.header(text["available_tests_header"])
         available_tests = exams.list_published_tests_for_student(st.session_state.username)
 
@@ -1212,3 +1314,23 @@ else:  # role == "student"
                                     f"{result['score']}/{result['total']}"
                                 )
                                 st.rerun()
+
+    else:  # screen == "flashcards"
+        st.header(text["flashcards_header"])
+        flashcards = exams.list_flashcards_for_student(st.session_state.username)
+
+        if not flashcards:
+            st.caption(text["no_flashcards_message"])
+        else:
+            for flashcard in flashcards:
+                with st.expander(flashcard["question_text"]):
+                    reveal_key = f"reveal_flashcard_{flashcard['id']}"
+                    if st.button(text["show_answer_button"], key=f"show_{flashcard['id']}"):
+                        st.session_state[reveal_key] = True
+
+                    if st.session_state.get(reveal_key):
+                        st.write(flashcard["correct_answer_text"])
+
+                    if st.button(text["got_it_button"], key=f"got_it_{flashcard['id']}"):
+                        exams.delete_flashcard(flashcard["id"], st.session_state.username)
+                        st.rerun()
