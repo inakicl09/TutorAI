@@ -1,6 +1,6 @@
 import pytest
 
-from tutorai import chat_storage, users
+from tutorai import chat_storage, sessions, users
 
 
 def test_create_and_verify_student_login():
@@ -264,6 +264,15 @@ def test_delete_user_removes_student_and_their_data():
     assert users.get_user("ana") is None
     assert users.students_linked_to_teacher("profesor_lopez") == []
     assert chat_storage.load_chats("ana") == []
+
+
+def test_delete_user_invalidates_their_sessions():
+    users.create_student("ana", "secret123", "1º ESO")
+    token = sessions.create_session("ana")
+
+    users.delete_user("ana")
+
+    assert sessions.get_username_for_token(token) is None
 
 
 def test_delete_user_removes_teacher_and_their_assignments():

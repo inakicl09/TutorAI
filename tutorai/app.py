@@ -28,6 +28,7 @@ from tutorai import (
     homerooms,
     prompts,
     rag,
+    sessions,
     subjects,
     translations,
     users,
@@ -47,6 +48,36 @@ if "test_chats_loaded" not in st.session_state:
     st.session_state.test_chats_loaded = False
 if "artemis_chat_loaded" not in st.session_state:
     st.session_state.artemis_chat_loaded = False
+
+# Restoring a login from the URL's session token (if any) is what lets a
+# restart of the Streamlit server -- which wipes st.session_state -- log
+# the user back in automatically, since the token survives in the
+# browser's URL and in the sessions table.
+if st.session_state.username is None:
+    token_from_url = st.query_params.get("session")
+    if token_from_url:
+        restored_username = sessions.get_username_for_token(token_from_url)
+        if restored_username:
+            st.session_state.username = restored_username
+
+
+def log_in_as(username: str) -> None:
+    """Set the logged-in user and start a persistent session for them."""
+    st.session_state.username = username
+    st.query_params["session"] = sessions.create_session(username)
+
+
+def log_out() -> None:
+    """Clear the logged-in user and end their persistent session."""
+    token = st.query_params.get("session")
+    if token:
+        sessions.delete_session(token)
+        del st.query_params["session"]
+    st.session_state.username = None
+    st.session_state.chats_loaded = False
+    st.session_state.test_chats_loaded = False
+    st.session_state.artemis_chat_loaded = False
+
 
 # Sentinel grade/subject for Artemis's single chat -- admin isn't tied to
 # a real grade or subject, but the chats table requires both.
@@ -76,7 +107,7 @@ if st.session_state.username is None:
     if auth_mode == text["login_tab"]:
         if st.button(text["login_button"]):
             if users.verify_login(username_input, password_input):
-                st.session_state.username = username_input
+                log_in_as(username_input)
                 st.rerun()
             else:
                 st.error(text["login_failed_error"])
@@ -95,11 +126,11 @@ if st.session_state.username is None:
                 st.error(text["signup_username_taken_error"])
             elif role_choice == text["role_student"]:
                 users.create_student(username_input, password_input, signup_grade)
-                st.session_state.username = username_input
+                log_in_as(username_input)
                 st.rerun()
             else:
                 users.create_teacher(username_input, password_input)
-                st.session_state.username = username_input
+                log_in_as(username_input)
                 st.rerun()
 
     # --- TEMPORARY: remove this block once the project is finished ---
@@ -113,7 +144,7 @@ if st.session_state.username is None:
             text["dev_login_label"], options=all_usernames, key="dev_login_username"
         )
         if st.button(text["dev_login_button"], key="dev_login_button"):
-            st.session_state.username = dev_login_username
+            log_in_as(dev_login_username)
             st.rerun()
     # --- END TEMPORARY ---
 
@@ -151,10 +182,7 @@ SCREENS_BY_ROLE = {
 with st.sidebar:
     st.write(f"{text['logged_in_as']} **{st.session_state.username}** ({text[f'role_{role}']})")
     if st.button(text["logout_button"]):
-        st.session_state.username = None
-        st.session_state.chats_loaded = False
-        st.session_state.test_chats_loaded = False
-        st.session_state.artemis_chat_loaded = False
+        log_out()
         st.rerun()
 
     screen_ids = [screen_id for screen_id, _ in SCREENS_BY_ROLE[role]]

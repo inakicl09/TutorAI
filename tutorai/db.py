@@ -170,6 +170,18 @@ def init_db() -> None:
                 correct_answer_text TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+
+            -- A logged-in browser session, identified by a random token
+            -- kept in the URL's query string (see sessions.py). Lets a
+            -- restart of the Streamlit server (which wipes its in-memory
+            -- st.session_state) log the user back in automatically,
+            -- since the token survives in the browser's URL and this
+            -- table survives in the database.
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                username TEXT NOT NULL REFERENCES users(username),
+                created_at TEXT NOT NULL
+            );
             """
         )
 

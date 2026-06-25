@@ -484,6 +484,7 @@ def delete_user(username: str) -> None:
             connection.execute("DELETE FROM flashcards WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM tests WHERE teacher_username = ?", (username,))
 
+        connection.execute("DELETE FROM sessions WHERE username = ?", (username,))
         connection.execute("DELETE FROM users WHERE username = ?", (username,))
         connection.commit()
     finally:

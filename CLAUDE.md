@@ -126,6 +126,16 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   Deliberately not named `tests.py`, so it doesn't read like the
   project's pytest suite (`tests/`, no `__init__.py`, just a sibling
   directory -- not an actual import collision, but a human-confusion one).
+- `sessions.py` — persistent logins. `create_session(username)` makes a
+  random token (`secrets.token_urlsafe`) and stores it in a `sessions`
+  table; `get_username_for_token`/`delete_session`/
+  `delete_sessions_for_user` round it out. The token lives in the
+  browser's URL via `st.query_params["session"]` (see `app.py`'s
+  `log_in_as`/`log_out` helpers), so restarting the Streamlit server --
+  which wipes `st.session_state` -- doesn't log anyone out: on the next
+  run, `app.py` checks the URL for a token and resolves it back to a
+  username before showing the login screen. `users.delete_user` cleans
+  up a deleted account's sessions too.
 - `app.py` — login/signup gate (role choice: student or teacher; no admin
   signup path). Once logged in, the sidebar (below the logged-in-as/logout
   controls) has a `st.radio` screen picker, `SCREENS_BY_ROLE`, so each
@@ -359,6 +369,17 @@ confirming `./run.sh` still starts cleanly.
   ask, and also because the machine running this (8GB RAM, no dedicated
   GPU) is already tight on resources for one local model at a time; see
   the performance note below.
+- Persistent logins use a token in the URL (`st.query_params`) backed by
+  a `sessions` table, not Streamlit's `st.session_state` alone --
+  `session_state` lives only in server memory and is wiped on every
+  restart, which is exactly the problem the user asked to fix. No
+  expiry is implemented yet (a token works forever until logout);
+  that's a known gap, not an oversight, given the project's size.
+- Admin can now both add a teaching assignment to any teacher (mirrors
+  the teacher's own self-service "My classes" form) and move a student
+  from one class to another (`users.move_student_link`: links the new
+  class first, raising if invalid, before unlinking the old one, so a
+  bad move never leaves the student with neither).
 
 ## Known gotcha: hardware constraints on local generation
 
@@ -432,6 +453,8 @@ Practical implications to keep in mind:
   (`test_submissions` UNIQUE constraint), with no override path yet.
 - Self-service password reset still doesn't exist, but admin can now
   reset any user's password from the dashboard as a workaround.
+- No session expiry — a persistent login token (`sessions.py`) is valid
+  forever until the user explicitly logs out.
 - Admin can't change a user's role (e.g. promote student to teacher) or
   create another admin from the UI — delete+recreate is the only path,
   and admin creation stays exclusively in `create_admin.py`.
