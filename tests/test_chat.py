@@ -1,55 +1,46 @@
-"""chat.py talks to Ollama over the network, so these tests mock the
-response instead of needing a real Ollama server running.
+"""chat.py talks to Groq over the network, so these tests mock the
+client instead of needing a real API connection.
 """
 
-import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from tutorai import chat
 
 
-class FakeResponse:
-    def __init__(self, body: dict):
-        self._body = json.dumps(body).encode("utf-8")
-
-    def read(self):
-        return self._body
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
+def make_fake_completion(content: str):
+    """Build a fake OpenAI-style completion response with the given content."""
+    msg = MagicMock()
+    msg.content = content
+    choice = MagicMock()
+    choice.message = msg
+    response = MagicMock()
+    response.choices = [choice]
+    return response
 
 
-def test_is_ollama_installed_reflects_whether_the_command_is_found():
-    with patch("shutil.which", return_value="/usr/local/bin/ollama"):
-        assert chat.is_ollama_installed() is True
-
-    with patch("shutil.which", return_value=None):
-        assert chat.is_ollama_installed() is False
+def test_is_api_key_configured_returns_true_when_key_is_set(monkeypatch):
+    monkeypatch.setattr(chat.config, "GROQ_API_KEY", "fake-key")
+    assert chat.is_api_key_configured() is True
 
 
-def test_get_available_models_filters_out_the_embedding_model():
-    fake_body = {
-        "models": [
-            {"name": "mistral"},
-            {"name": "llama3"},
-            {"name": "nomic-embed-text"},
-        ]
-    }
+def test_is_api_key_configured_returns_false_when_key_is_empty(monkeypatch):
+    monkeypatch.setattr(chat.config, "GROQ_API_KEY", "")
+    assert chat.is_api_key_configured() is False
 
-    with patch("urllib.request.urlopen", return_value=FakeResponse(fake_body)):
-        available_models = chat.get_available_models()
 
-    assert available_models == ["mistral", "llama3"]
+def test_get_available_models_returns_a_non_empty_list():
+    models = chat.get_available_models()
+    assert len(models) > 0
+    assert all(isinstance(m, str) for m in models)
 
 
 def test_ask_assistant_appends_user_and_assistant_messages():
     conversation_history = [{"role": "system", "content": "system prompt"}]
-    fake_body = {"message": {"role": "assistant", "content": "Here is a draft question..."}}
 
-    with patch("urllib.request.urlopen", return_value=FakeResponse(fake_body)):
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion(
+            "Here is a draft question..."
+        )
         reply = chat.ask_assistant(conversation_history, "Make me 3 questions about fractions")
 
     assert reply == "Here is a draft question..."
@@ -71,9 +62,9 @@ def test_ask_assistant_does_not_touch_rag(monkeypatch):
     monkeypatch.setattr(rag, "retrieve_relevant_chunks", fail_if_called)
 
     conversation_history = [{"role": "system", "content": "system prompt"}]
-    fake_body = {"message": {"role": "assistant", "content": "ok"}}
 
-    with patch("urllib.request.urlopen", return_value=FakeResponse(fake_body)):
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion("ok")
         chat.ask_assistant(conversation_history, "hello")
 
 
@@ -89,9 +80,11 @@ def test_ask_logos_with_material_searches_the_teacher_materials_collection(monke
     monkeypatch.setattr(rag, "retrieve_relevant_chunks", fake_retrieve)
 
     conversation_history = [{"role": "system", "content": "system prompt"}]
-    fake_body = {"message": {"role": "assistant", "content": "Here's a question on fractions."}}
 
-    with patch("urllib.request.urlopen", return_value=FakeResponse(fake_body)):
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion(
+            "Here's a question on fractions."
+        )
         reply = chat.ask_logos_with_material(conversation_history, "Make a question")
 
     assert seen_calls == [("Make a question", rag.TEACHER_MATERIALS_COLLECTION)]
@@ -106,9 +99,9 @@ def test_ask_logos_with_material_falls_back_when_nothing_relevant(monkeypatch):
     monkeypatch.setattr(rag, "retrieve_relevant_chunks", lambda *a, **k: [])
 
     conversation_history = [{"role": "system", "content": "system prompt"}]
-    fake_body = {"message": {"role": "assistant", "content": "ok"}}
 
-    with patch("urllib.request.urlopen", return_value=FakeResponse(fake_body)):
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion("ok")
         chat.ask_logos_with_material(conversation_history, "hello")
 
     assert conversation_history[1] == {"role": "user", "content": "hello"}
@@ -128,7 +121,7 @@ def test_generate_structured_test_sends_a_user_message_not_system(monkeypatch):
         captured_messages.extend(messages)
         return "QUESTION: ...\nA) 1\nB) 2\nC) 3\nD) 4\nCORRECT: A\n###"
 
-    monkeypatch.setattr(chat, "_call_ollama_chat", fake_call)
+    monkeypatch.setattr(chat, "_call_groq_chat", fake_call)
 
     chat.generate_structured_test("1º ESO", "Matemáticas", "es", 3)
 
@@ -147,8 +140,8 @@ def test_generate_structured_test_searches_teacher_materials(monkeypatch):
 
     monkeypatch.setattr(rag, "retrieve_relevant_chunks", fake_retrieve)
 
-    fake_body = {"message": {"role": "assistant", "content": "ok"}}
-    with patch("urllib.request.urlopen", return_value=FakeResponse(fake_body)):
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion("ok")
         chat.generate_structured_test("1º ESO", "Matemáticas", "es", 3)
 
     assert seen_calls == [("Matemáticas exam questions", rag.TEACHER_MATERIALS_COLLECTION)]

@@ -1,60 +1,40 @@
 """Conversation logic: combines the Socratic prompt, retrieved course
-material, and the Ollama model to produce the tutor's replies. Also
+material, and the Groq API to produce the tutor's replies. Also
 talks to Logos (teacher), which can optionally use a teacher's uploaded
 exam material as RAG context, and Artemis (admin), which never uses RAG.
 """
 
-import json
-import shutil
-import urllib.request
+from openai import OpenAI
 
 from tutorai import config, prompts, rag
 
+# One shared client for the whole app -- the OpenAI SDK is thread-safe
+# and Groq uses the same API format as OpenAI.
+_client = OpenAI(api_key=config.GROQ_API_KEY, base_url=config.GROQ_BASE_URL)
 
-def is_ollama_installed() -> bool:
-    """Check whether the `ollama` command exists on this machine, so we
-    can tell a "not installed" error apart from "installed but not
-    running right now"."""
-    return shutil.which("ollama") is not None
+
+def is_api_key_configured() -> bool:
+    """Return True if the Groq API key has been set in the environment."""
+    return bool(config.GROQ_API_KEY)
 
 
 def get_available_models() -> list[str]:
-    """Ask Ollama which chat models are installed locally.
-
-    The embedding model is left out since it can't hold a conversation.
-    Raises urllib.error.URLError if Ollama isn't running.
-    """
-    with urllib.request.urlopen(config.OLLAMA_TAGS_URL) as response:
-        response_body = json.loads(response.read())
-
-    all_model_names = [model["name"] for model in response_body["models"]]
+    """Return the list of Groq chat models available for this app."""
     return [
-        model_name
-        for model_name in all_model_names
-        if not model_name.startswith(config.EMBEDDING_MODEL_NAME)
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it",
     ]
 
 
-def _call_ollama_chat(messages: list[dict], model_name: str) -> str:
-    """POST a list of messages to Ollama's /api/chat and return the
-    reply's content."""
-    request_body = {
-        "model": model_name,
-        "messages": messages,
-        "stream": False,
-    }
-    request_data = json.dumps(request_body).encode("utf-8")
-
-    request = urllib.request.Request(
-        config.OLLAMA_CHAT_URL,
-        data=request_data,
-        headers={"Content-Type": "application/json"},
+def _call_groq_chat(messages: list[dict], model_name: str) -> str:
+    """Send a list of messages to Groq and return the reply text."""
+    response = _client.chat.completions.create(
+        model=model_name,
+        messages=messages,
     )
-
-    with urllib.request.urlopen(request) as response:
-        response_body = json.loads(response.read())
-
-    return response_body["message"]["content"]
+    return response.choices[0].message.content
 
 
 def ask_tutor(
@@ -80,7 +60,7 @@ def ask_tutor(
             "content": context_prompt + "\n\nStudent's message: " + student_message,
         }
 
-    tutor_reply = _call_ollama_chat(messages_for_model, model_name)
+    tutor_reply = _call_groq_chat(messages_for_model, model_name)
     conversation_history.append({"role": "assistant", "content": tutor_reply})
 
     return tutor_reply
@@ -97,9 +77,8 @@ def ask_assistant(
     `conversation_history` is updated in place, same as ask_tutor.
     """
     conversation_history.append({"role": "user", "content": message})
-    reply = _call_ollama_chat(conversation_history, model_name)
+    reply = _call_groq_chat(conversation_history, model_name)
     conversation_history.append({"role": "assistant", "content": reply})
-
     return reply
 
 
@@ -113,8 +92,8 @@ def ask_logos_with_material(
 
     Mirrors ask_tutor's RAG step, but over the teacher's own material
     instead of the student's course documents -- the two are kept in
-    separate chromaDB collections so a teacher's exam content never
-    leaks into a student's tutoring session. If nothing's been uploaded
+    separate chromaDB collections so a teacher's exam content can never
+    leak into a student's tutoring session. If nothing's been uploaded
     (or nothing relevant is found), this behaves just like ask_assistant.
     """
     relevant_chunks = rag.retrieve_relevant_chunks(
@@ -131,7 +110,7 @@ def ask_logos_with_material(
             "content": context_prompt + "\n\nTeacher's message: " + teacher_message,
         }
 
-    reply = _call_ollama_chat(messages_for_model, model_name)
+    reply = _call_groq_chat(messages_for_model, model_name)
     conversation_history.append({"role": "assistant", "content": reply})
 
     return reply
@@ -147,14 +126,12 @@ def generate_structured_test(
     """One-shot generation of a multiple-choice test (not an ongoing
     chat), using any uploaded exam material as RAG context. Returns the
     raw model text -- parse it with exams.parse_structured_test before
-    publishing, since local models don't always follow the format
-    exactly.
+    publishing, since models don't always follow the format exactly.
 
     Sent as a "user" message, not "system" -- a system-only conversation
     (no user turn at all) made Mistral via Ollama ignore the formatting
-    instructions entirely and emit unrelated training-data-like snippets
-    instead, even though the exact same text as a user message worked
-    reliably.
+    instructions entirely and emit unrelated snippets instead, even though
+    the exact same text as a user message worked reliably.
     """
     relevant_chunks = rag.retrieve_relevant_chunks(
         f"{subject} exam questions", collection_name=rag.TEACHER_MATERIALS_COLLECTION
@@ -163,4 +140,4 @@ def generate_structured_test(
     structured_prompt = prompts.build_structured_test_prompt(
         grade, subject, language, num_questions, material_context
     )
-    return _call_ollama_chat([{"role": "user", "content": structured_prompt}], model_name)
+    return _call_groq_chat([{"role": "user", "content": structured_prompt}], model_name)

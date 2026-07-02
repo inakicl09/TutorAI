@@ -14,7 +14,6 @@ Run this in iTerm with: python3 -m streamlit run tutorai/app.py
 """
 
 import os
-import urllib.error
 
 import streamlit as st
 
@@ -571,14 +570,7 @@ if role == "admin":
                 )
             st.session_state.artemis_chat_loaded = True
 
-        try:
-            artemis_available_models = chat.get_available_models()
-        except urllib.error.URLError:
-            if chat.is_ollama_installed():
-                st.error(text["ollama_unreachable"])
-            else:
-                st.error(text["ollama_not_installed"])
-            artemis_available_models = None
+        artemis_available_models = chat.get_available_models()
 
         if artemis_available_models:
             artemis_default_index = (
@@ -615,7 +607,7 @@ if role == "admin":
                         artemis_reply = chat.ask_assistant(
                             artemis_chat["history"], admin_message, artemis_selected_model
                         )
-                except urllib.error.URLError:
+                except Exception:
                     st.error(text["ollama_disconnected"])
                     st.stop()
 
@@ -738,14 +730,7 @@ elif role == "teacher":
             st.session_state.active_test_chat_id = None
             st.session_state.test_chats_loaded = True
 
-        try:
-            logos_available_models = chat.get_available_models()
-        except urllib.error.URLError:
-            if chat.is_ollama_installed():
-                st.error(text["ollama_unreachable"])
-            else:
-                st.error(text["ollama_not_installed"])
-            logos_available_models = None
+        logos_available_models = chat.get_available_models()
 
         if logos_available_models:
             logos_default_index = (
@@ -920,7 +905,7 @@ elif role == "teacher":
                             logos_reply = ask_logos(
                                 active_test_chat["history"], teacher_message, logos_selected_model
                             )
-                    except urllib.error.URLError:
+                    except Exception:
                         st.error(text["ollama_disconnected"])
                         st.stop()
 
@@ -1220,14 +1205,7 @@ else:  # role == "student"
             )
             st.session_state.active_chat_id = chat_ids[chat_labels.index(chosen_chat_label)]
 
-        try:
-            available_models = chat.get_available_models()
-        except urllib.error.URLError:
-            if chat.is_ollama_installed():
-                st.error(text["ollama_unreachable"])
-            else:
-                st.error(text["ollama_not_installed"])
-            st.stop()
+        available_models = chat.get_available_models()
 
         default_index = (
             available_models.index(config.CHAT_MODEL_NAME)
@@ -1263,7 +1241,7 @@ else:  # role == "student"
                         tutor_reply = chat.ask_tutor(
                             active_chat["history"], student_message, selected_model
                         )
-                except urllib.error.URLError:
+                except Exception:
                     st.error(text["ollama_disconnected"])
                     st.stop()
 

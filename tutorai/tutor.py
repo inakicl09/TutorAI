@@ -1,4 +1,4 @@
-"""TutorAI prototype: a Socratic tutor powered by a local Ollama model.
+"""TutorAI prototype: a Socratic tutor powered by the Groq API.
 Run this in iTerm with: python3 -m tutorai.tutor
 
 This is the original command-line prototype, kept for quick testing
@@ -8,38 +8,9 @@ students can still link to a teacher with a join code and chat, but
 teacher/admin accounts are told to use the web app instead.
 """
 
-import json
-import shutil
-import urllib.error
-import urllib.request
-
-from tutorai import chat_storage, classes, config, db, homerooms, prompts, subjects, translations, users
+from tutorai import chat, chat_storage, classes, config, db, homerooms, prompts, subjects, translations, users
 
 QUIT_WORDS = {"quit", "exit", "salir"}
-
-
-def is_ollama_installed() -> bool:
-    """Check whether the `ollama` command exists on this machine, so we
-    can tell a "not installed" error apart from "installed but not
-    running right now"."""
-    return shutil.which("ollama") is not None
-
-
-def get_available_models() -> list[str]:
-    """Ask Ollama which chat models are installed locally.
-
-    The embedding model is left out since it can't hold a conversation.
-    Raises urllib.error.URLError if Ollama isn't running.
-    """
-    with urllib.request.urlopen(config.OLLAMA_TAGS_URL) as response:
-        response_body = json.loads(response.read())
-
-    all_model_names = [model["name"] for model in response_body["models"]]
-    return [
-        model_name
-        for model_name in all_model_names
-        if not model_name.startswith(config.EMBEDDING_MODEL_NAME)
-    ]
 
 
 def choose_from_list(prompt_label: str, options: list[str], invalid_message: str) -> int:
@@ -165,32 +136,11 @@ def choose_subject_link(text: dict, username: str) -> dict:
 
 
 def choose_model(available_models: list[str], text: dict) -> str:
-    """Ask the student which installed model they want to use."""
+    """Ask the student which model they want to use."""
     chosen_index = choose_from_list(
         text["cli_choose_model"], available_models, text["cli_invalid_number"]
     )
     return available_models[chosen_index]
-
-
-def ask_ollama(conversation_history: list[dict], model_name: str) -> str:
-    """Send the conversation so far to Ollama and return the tutor's reply."""
-    request_body = {
-        "model": model_name,
-        "messages": conversation_history,
-        "stream": False,
-    }
-    request_data = json.dumps(request_body).encode("utf-8")
-
-    request = urllib.request.Request(
-        config.OLLAMA_CHAT_URL,
-        data=request_data,
-        headers={"Content-Type": "application/json"},
-    )
-
-    with urllib.request.urlopen(request) as response:
-        response_body = json.loads(response.read())
-
-    return response_body["message"]["content"]
 
 
 def main() -> None:
@@ -212,15 +162,11 @@ def main() -> None:
         print(f"\n{text['cli_teacher_cli_message']}")
         return
 
-    try:
-        available_models = get_available_models()
-    except urllib.error.URLError:
-        if is_ollama_installed():
-            print(text["cli_ollama_unreachable"])
-        else:
-            print(text["cli_ollama_not_installed"])
+    if not chat.is_api_key_configured():
+        print(text["cli_ollama_not_installed"])
         return
 
+    available_models = chat.get_available_models()
     chosen_link = choose_subject_link(text, username)
     selected_model = choose_model(available_models, text)
 
@@ -247,9 +193,11 @@ def main() -> None:
         conversation_history.append({"role": "user", "content": student_message})
 
         try:
-            tutor_reply = ask_ollama(conversation_history, selected_model)
-        except urllib.error.URLError:
+            tutor_reply = chat._call_groq_chat(conversation_history, selected_model)
+        except Exception:
             print(text["cli_ollama_disconnected"])
+            # Remove the message we just appended so the history stays consistent.
+            conversation_history.pop()
             continue
 
         conversation_history.append({"role": "assistant", "content": tutor_reply})

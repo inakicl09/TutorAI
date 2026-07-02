@@ -12,7 +12,7 @@ from typing import Optional
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_ollama import OllamaEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from tutorai import config
 
@@ -22,8 +22,12 @@ TEACHER_MATERIALS_COLLECTION = "teacher_materials"
 def get_vector_store(collection_name: Optional[str] = None) -> Chroma:
     """Open (or create) a chromaDB collection where document chunks are
     stored. Defaults to the student course-material collection; pass
-    TEACHER_MATERIALS_COLLECTION for a teacher's exam material instead."""
-    embeddings = OllamaEmbeddings(model=config.EMBEDDING_MODEL_NAME)
+    TEACHER_MATERIALS_COLLECTION for a teacher's exam material instead.
+
+    The embedding model (all-MiniLM-L6-v2) runs locally via
+    sentence-transformers -- no API key needed, ~22 MB download on first use.
+    """
+    embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL_NAME)
     kwargs = {"persist_directory": config.CHROMA_DIR, "embedding_function": embeddings}
     if collection_name:
         kwargs["collection_name"] = collection_name

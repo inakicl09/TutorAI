@@ -190,15 +190,14 @@ TEXT = {
         "chat_placeholder": "Escribe tu pregunta...",
         "thinking_spinner": "Pensando...",
         "ollama_unreachable": (
-            "No se pudo conectar con Ollama. Ejecuta 'ollama serve' y "
-            "vuelve a cargar esta página."
+            "No se pudo conectar con Groq. Comprueba tu conexión a internet "
+            "y vuelve a cargar esta página."
         ),
         "ollama_not_installed": (
-            "No se encontró Ollama en este ordenador. Descárgalo desde "
-            "https://ollama.com/download, instálalo y luego ejecuta "
-            "'ollama serve' antes de volver a cargar esta página."
+            "La clave de API de Groq no está configurada. "
+            "Comprueba el archivo .env e inténtalo de nuevo."
         ),
-        "ollama_disconnected": "Se perdió la conexión con Ollama. Comprueba que sigue en marcha.",
+        "ollama_disconnected": "Se perdió la conexión con Groq. Comprueba tu conexión a internet.",
         "cli_title": "=== TutorAI: Tutor Socrático ===",
         "cli_choose_subject": "Elige una asignatura:",
         "cli_choose_model": "Modelos disponibles:",
@@ -209,15 +208,14 @@ TEXT = {
         "cli_tutor_label": "Tutor:",
         "cli_goodbye": "Tutor: ¡Hasta luego! Sigue cuestionando todo.",
         "cli_ollama_unreachable": (
-            "No se pudo conectar con Ollama. Ejecuta 'ollama serve' y "
-            "vuelve a intentarlo."
+            "No se pudo conectar con Groq. Comprueba tu conexión a internet "
+            "y vuelve a intentarlo."
         ),
         "cli_ollama_not_installed": (
-            "No se encontró Ollama en este ordenador. Descárgalo desde "
-            "https://ollama.com/download, instálalo y luego ejecuta "
-            "'ollama serve' antes de volver a intentarlo."
+            "La clave de API de Groq no está configurada. "
+            "Comprueba el archivo .env y vuelve a intentarlo."
         ),
-        "cli_ollama_disconnected": "Tutor: No puedo conectar con Ollama. ¿Está en marcha? Prueba 'ollama serve'.",
+        "cli_ollama_disconnected": "Tutor: No puedo conectar con Groq. Comprueba tu conexión a internet.",
     },
     "en": {
         "app_title": "TutorAI: your Socratic tutor",
@@ -402,13 +400,12 @@ TEXT = {
         "upload_success": "Added {num_chunks} chunks to the knowledge base.",
         "chat_placeholder": "Type your question...",
         "thinking_spinner": "Thinking...",
-        "ollama_unreachable": "Could not connect to Ollama. Run 'ollama serve' and reload this page.",
+        "ollama_unreachable": "Could not connect to Groq. Check your internet connection and reload this page.",
         "ollama_not_installed": (
-            "Ollama wasn't found on this computer. Download it from "
-            "https://ollama.com/download, install it, then run "
-            "'ollama serve' and reload this page."
+            "Groq API key is not configured. "
+            "Check your .env file and try again."
         ),
-        "ollama_disconnected": "Lost connection to Ollama. Check that it's still running.",
+        "ollama_disconnected": "Lost connection to Groq. Check your internet connection.",
         "cli_title": "=== TutorAI: Socratic Tutor ===",
         "cli_choose_subject": "Choose a subject:",
         "cli_choose_model": "Available models:",
@@ -418,12 +415,11 @@ TEXT = {
         "cli_you_label": "You: ",
         "cli_tutor_label": "Tutor:",
         "cli_goodbye": "Tutor: Goodbye! Keep questioning everything.",
-        "cli_ollama_unreachable": "Could not connect to Ollama. Run 'ollama serve' and try again.",
+        "cli_ollama_unreachable": "Could not connect to Groq. Check your internet connection and try again.",
         "cli_ollama_not_installed": (
-            "Ollama wasn't found on this computer. Download it from "
-            "https://ollama.com/download, install it, then run "
-            "'ollama serve' and try again."
+            "Groq API key is not configured. "
+            "Check your .env file and try again."
         ),
-        "cli_ollama_disconnected": "Tutor: I can't reach Ollama. Is it running? Try 'ollama serve'.",
+        "cli_ollama_disconnected": "Tutor: I can't reach Groq. Check your internet connection.",
     },
 }

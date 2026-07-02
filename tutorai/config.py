@@ -1,9 +1,17 @@
-"""Shared settings for TutorAI: model names, Ollama URL, and file paths."""
+"""Shared settings for TutorAI: model names, Groq API settings, and file paths."""
 
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
-CHAT_MODEL_NAME = "mistral"
-EMBEDDING_MODEL_NAME = "nomic-embed-text"
+import os
+
+# Groq API key, loaded from the GROQ_API_KEY environment variable (set in .env).
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+
+# Default chat model. All models below are available via Groq for free.
+CHAT_MODEL_NAME = "llama-3.3-70b-versatile"
+
+# Embedding model used by sentence-transformers for RAG (runs locally, no API key needed).
+# Downloaded automatically the first time it's used (~22 MB).
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 DOCUMENTS_DIR = "data/documents"
 CHROMA_DIR = "data/chroma_db"
@@ -18,8 +26,7 @@ CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 NUM_CHUNKS_TO_RETRIEVE = 4
 
-# Display name shown to each role once logged in. Teachers and admin
-# don't have their own LLM/RAG assistant yet -- these are just labels.
+# Display name shown to each role once logged in.
 ASSISTANT_NAMES = {
     "student": "Socrates",
     "teacher": "Logos",
