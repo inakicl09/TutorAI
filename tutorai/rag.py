@@ -9,23 +9,44 @@ teacher's exam content can never leak into a student's tutoring session.
 
 from typing import Optional
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+import chromadb
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from tutorai import config
 
+# NOTE: RecursiveCharacterTextSplitter and PyPDFLoader are imported lazily
+# inside add_pdf_to_vector_store because importing them currently pulls in
+# sentence_transformers, which fails on this machine's torch/transformers/numpy
+# version mix. Deferring keeps app startup working; the failure only surfaces
+# if someone actually uploads a PDF (fixable by running the package upgrade in
+# requirements.txt once the torch/numpy conflict is resolved).
+
 TEACHER_MATERIALS_COLLECTION = "teacher_materials"
+
+# langchain_chroma uses "langchain" as the default collection name when none
+# is specified -- this must match what Chroma() creates internally.
+_DEFAULT_COLLECTION = "langchain"
+
+
+def _collection_has_documents(collection_name: Optional[str]) -> bool:
+    """Check whether a ChromaDB collection has any documents, WITHOUT loading
+    the embedding model. The embedding model is heavy (~22 MB download) and
+    currently broken on this machine, so we skip it entirely when the
+    collection is empty and there is nothing to search anyway."""
+    chroma_name = collection_name if collection_name else _DEFAULT_COLLECTION
+    try:
+        client = chromadb.PersistentClient(path=config.CHROMA_DIR)
+        col = client.get_collection(chroma_name)
+        return col.count() > 0
+    except Exception:
+        return False  # collection doesn't exist yet = empty
 
 
 def get_vector_store(collection_name: Optional[str] = None) -> Chroma:
     """Open (or create) a chromaDB collection where document chunks are
-    stored. Defaults to the student course-material collection; pass
-    TEACHER_MATERIALS_COLLECTION for a teacher's exam material instead.
-
-    The embedding model (all-MiniLM-L6-v2) runs locally via
-    sentence-transformers -- no API key needed, ~22 MB download on first use.
+    stored. Only call this when you know the collection has documents --
+    it loads the embedding model, which is expensive.
     """
     embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL_NAME)
     kwargs = {"persist_directory": config.CHROMA_DIR, "embedding_function": embeddings}
@@ -39,6 +60,10 @@ def add_pdf_to_vector_store(pdf_path: str, collection_name: Optional[str] = None
 
     Returns the number of chunks added.
     """
+    # Deferred imports -- see the NOTE at the top of this module.
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     loader = PyPDFLoader(pdf_path)
     pages = loader.load()
 
@@ -57,15 +82,14 @@ def add_pdf_to_vector_store(pdf_path: str, collection_name: Optional[str] = None
 def retrieve_relevant_chunks(question: str, collection_name: Optional[str] = None) -> list[str]:
     """Find the document chunks most relevant to the question.
 
-    Skips loading the embedding model entirely if the collection has no
-    documents yet -- there's nothing to search, so there's no reason to
-    pay for an embedding call (meaningful on memory-constrained machines
-    running a local LLM at the same time).
+    Returns an empty list immediately if the collection has no documents yet,
+    without ever loading the embedding model (which is expensive and currently
+    broken on this machine due to a torch/numpy version conflict).
     """
-    vector_store = get_vector_store(collection_name)
-    if vector_store._collection.count() == 0:
+    if not _collection_has_documents(collection_name):
         return []
 
+    vector_store = get_vector_store(collection_name)
     results = vector_store.similarity_search(
         question, k=config.NUM_CHUNKS_TO_RETRIEVE
     )

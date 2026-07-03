@@ -9,8 +9,19 @@ from openai import OpenAI
 from tutorai import config, prompts, rag
 
 # One shared client for the whole app -- the OpenAI SDK is thread-safe
-# and Groq uses the same API format as OpenAI.
-_client = OpenAI(api_key=config.GROQ_API_KEY, base_url=config.GROQ_BASE_URL)
+# and Groq uses the same API format as OpenAI. Created lazily on first
+# use rather than at import time: the OpenAI constructor raises when the
+# API key is missing, which would make `import tutorai.chat` itself crash
+# in any environment without GROQ_API_KEY set (pytest, scripts). The app
+# checks is_api_key_configured() and shows its own error instead.
+_client = None
+
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=config.GROQ_API_KEY, base_url=config.GROQ_BASE_URL)
+    return _client
 
 
 def is_api_key_configured() -> bool:
@@ -30,7 +41,7 @@ def get_available_models() -> list[str]:
 
 def _call_groq_chat(messages: list[dict], model_name: str) -> str:
     """Send a list of messages to Groq and return the reply text."""
-    response = _client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model=model_name,
         messages=messages,
     )
