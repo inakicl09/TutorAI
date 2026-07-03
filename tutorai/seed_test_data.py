@@ -1,21 +1,18 @@
 """One-off script to seed test accounts, so you can see the teacher/admin
 dashboards and the student-activity/classes/homerooms views without
-signing up 120 accounts by hand.
+signing up 130 accounts by hand.
 
 Run it yourself: python3 -m tutorai.seed_test_data
 
-Creates ~10 teachers (each teaching 3-5 classes) and ~120 students (each
-connected to several classes), all sharing the simple test password
-below -- only ever linking within the student's own grade or one grade
-below, never further -- and gives about half the students a sample chat
-with a few backdated messages so "last active" timestamps actually vary.
-Safe to re-run: accounts that already exist are skipped instead of
-being recreated, but every test account's password is reset to PASSWORD
-on every run, so it stays simple even if it was set under an older
-version of this script.
+Creates 10 teachers (each teaching 5-8 classes) and 120 students (20 per
+grade, each connected to 4-6 classes), all sharing the simple test
+password below -- only ever linking within the student's own grade or one
+grade below, never further -- and gives about half the students a sample
+chat with a few backdated messages so "last active" timestamps vary.
 
-Also fixes any subject_links left over from before that "own grade or
-one below" rule existed.
+Safe to re-run: accounts that already exist are skipped instead of being
+recreated, but every test account's password is reset to PASSWORD on every
+run, so it stays simple even if it was set under an older version.
 """
 
 import random
@@ -25,7 +22,8 @@ from tutorai import chat_storage, classes, db, homerooms, prompts, subjects, use
 
 PASSWORD = "1234"
 NUM_TEACHERS = 10
-NUM_STUDENTS = 120
+STUDENTS_PER_GRADE = 20  # 20 × 6 grades = 120 students total
+
 
 SAMPLE_EXCHANGES = [
     ("How do I solve this?", "What have you tried so far?"),
@@ -45,7 +43,8 @@ def seed_teachers() -> list[str]:
             continue
 
         users.create_teacher(username, PASSWORD)
-        num_assignments = random.randint(3, 5)
+        # 5-8 assignments so there are enough classes for students needing 4-6 links.
+        num_assignments = random.randint(5, 8)
         for _ in range(num_assignments):
             grade = random.choice(subjects.GRADES)
             subject = random.choice(subjects.GRADE_SUBJECTS[grade])
@@ -55,15 +54,15 @@ def seed_teachers() -> list[str]:
 
 
 def top_up_teacher_assignments(teacher_usernames: list[str]) -> int:
-    """Existing teachers seeded under an older, lower range may have
-    fewer than 3 classes. Add more until each has at least 3. Returns
-    how many assignments were added."""
+    """Existing teachers seeded under an older, lower range may have fewer
+    than 5 classes. Add more until each has at least 5. Returns how many
+    assignments were added."""
     added = 0
     for username in teacher_usernames:
         teaching = users.get_user(username)["teaching"]
-        target = random.randint(3, 5)
+        target = random.randint(5, 8)
         attempts = 0
-        while len(teaching) < target and attempts < 20:
+        while len(teaching) < target and attempts < 30:
             attempts += 1
             grade = random.choice(subjects.GRADES)
             subject = random.choice(subjects.GRADE_SUBJECTS[grade])
@@ -77,8 +76,8 @@ def top_up_teacher_assignments(teacher_usernames: list[str]) -> int:
 
 
 def fix_invalid_subject_links() -> int:
-    """Remove any subject_link created before the "own grade or one
-    grade below" rule existed. Returns how many were removed."""
+    """Remove any subject_link created before the "own grade or one grade
+    below" rule existed. Returns how many were removed."""
     removed = 0
     for user in users.list_all_users():
         if user["role"] != "student":
@@ -97,8 +96,8 @@ def fix_invalid_subject_links() -> int:
 
 
 def _candidate_assignments_for_grade(grade: str, teacher_usernames: list[str]) -> list[tuple]:
-    """List (teacher_username, assignment) pairs valid for a student of
-    this grade -- i.e. the teacher's own grade or one grade below."""
+    """List (teacher_username, assignment) pairs valid for a student of this
+    grade -- i.e. the teacher teaches at the student's own grade or one below."""
     allowed_grades = users.allowed_link_grades(grade)
     return [
         (teacher_username, assignment)
@@ -109,21 +108,29 @@ def _candidate_assignments_for_grade(grade: str, teacher_usernames: list[str]) -
 
 
 def seed_students(teacher_usernames: list[str]) -> list[str]:
+    """Create 20 students per grade (120 total), each linked to 4-6 classes."""
     student_usernames = []
-    for index in range(1, NUM_STUDENTS + 1):
-        username = f"alumno_test_{index:03d}"
+    # Build the full list of (grade, index) pairs so students are distributed
+    # evenly: 20 per grade in a fixed order, not randomly.
+    grade_sequence = [
+        (grade, index)
+        for grade in subjects.GRADES
+        for index in range(1, STUDENTS_PER_GRADE + 1)
+    ]
+
+    for global_index, (grade, grade_index) in enumerate(grade_sequence, start=1):
+        username = f"alumno_test_{global_index:03d}"
         student_usernames.append(username)
         if users.username_exists(username):
             continue
 
-        grade = random.choice(subjects.GRADES)
         users.create_student(username, PASSWORD, grade)
 
         candidate_assignments = _candidate_assignments_for_grade(grade, teacher_usernames)
         if not candidate_assignments:
             continue
 
-        num_links = min(random.randint(2, 4), len(candidate_assignments))
+        num_links = min(random.randint(4, 6), len(candidate_assignments))
         for teacher_username, assignment in random.sample(candidate_assignments, num_links):
             users.link_student_to_teacher(
                 username, teacher_username, assignment["grade"], assignment["subject"]
@@ -133,9 +140,7 @@ def seed_students(teacher_usernames: list[str]) -> list[str]:
 
 
 def top_up_student_links(student_usernames: list[str], teacher_usernames: list[str]) -> int:
-    """Existing students seeded under an older, lower range (or who lost
-    links to the grade-distance cleanup) may have fewer than 2 classes.
-    Add more, picked from valid candidates, until each has at least 2.
+    """Existing students with fewer than 4 links get more added.
     Returns how many links were added."""
     added = 0
     for username in student_usernames:
@@ -143,14 +148,17 @@ def top_up_student_links(student_usernames: list[str], teacher_usernames: list[s
         candidate_assignments = _candidate_assignments_for_grade(
             student["grade"], teacher_usernames
         )
-        existing = {(link["teacher"], link["grade"], link["subject"]) for link in student["subject_links"]}
+        existing = {
+            (link["teacher"], link["grade"], link["subject"])
+            for link in student["subject_links"]
+        }
         remaining_candidates = [
             (teacher_username, assignment)
             for teacher_username, assignment in candidate_assignments
             if (teacher_username, assignment["grade"], assignment["subject"]) not in existing
         ]
 
-        target = random.randint(2, 4)
+        target = random.randint(4, 6)
         num_to_add = min(max(target - len(existing), 0), len(remaining_candidates))
         if num_to_add <= 0:
             continue
@@ -179,7 +187,8 @@ def seed_chat_activity(student_usernames: list[str]) -> None:
 
         system_prompt = prompts.build_system_prompt(link["grade"], link["subject"], "es")
         chat = chat_storage.create_chat(
-            username, link["grade"], link["subject"], system_prompt, created_at=base_time.isoformat()
+            username, link["grade"], link["subject"], system_prompt,
+            created_at=base_time.isoformat(),
         )
 
         num_exchanges = random.randint(1, 3)
@@ -190,16 +199,13 @@ def seed_chat_activity(student_usernames: list[str]) -> None:
                 chat["id"], "user", student_line, created_at=message_time.isoformat()
             )
             chat_storage.add_message(
-                chat["id"],
-                "assistant",
-                tutor_line,
+                chat["id"], "assistant", tutor_line,
                 created_at=(message_time + timedelta(seconds=30)).isoformat(),
             )
 
 
 def reset_test_passwords(usernames: list[str]) -> None:
-    """Force every test account's password back to PASSWORD, even if it
-    already existed under an older (more complex) test password."""
+    """Force every test account's password back to PASSWORD."""
     for username in usernames:
         users.set_password(username, PASSWORD)
 
@@ -217,10 +223,12 @@ def main() -> None:
     seed_chat_activity(student_usernames)
     reset_test_passwords(teacher_usernames + student_usernames)
 
-    print(f"Added {topped_up_teaching_count} teaching assignment(s) so every teacher has at least 3.")
+    total_students = STUDENTS_PER_GRADE * len(subjects.GRADES)
+    print(f"Seeded {len(teacher_usernames)} teachers and {total_students} students "
+          f"({STUDENTS_PER_GRADE} per grade).")
+    print(f"Added {topped_up_teaching_count} teaching assignment(s) so every teacher has at least 5.")
     print(f"Removed {removed_count} subject link(s) that were too far from a student's grade.")
-    print(f"Added {topped_up_links_count} subject link(s) so students connect to various classes.")
-    print(f"Seeded {len(teacher_usernames)} teachers and {len(student_usernames)} students.")
+    print(f"Added {topped_up_links_count} subject link(s) so every student has at least 4 classes.")
     print(f"All seeded accounts use the password: {PASSWORD}")
 
 

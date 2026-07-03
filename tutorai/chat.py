@@ -30,13 +30,26 @@ def is_api_key_configured() -> bool:
 
 
 def get_available_models() -> list[str]:
-    """Return the list of Groq chat models available for this app."""
-    return [
+    """Fetch the chat models actually available on this Groq account.
+
+    Filters to only the models this app is designed to work with, so the
+    dropdown never shows a model the account doesn't have access to (which
+    would cause a misleading "not connected" error on the first message).
+    Falls back to a safe default list if the API call itself fails.
+    """
+    supported = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
         "mixtral-8x7b-32768",
         "gemma2-9b-it",
     ]
+    try:
+        response = _get_client().models.list()
+        available_ids = {m.id for m in response.data}
+        live = [m for m in supported if m in available_ids]
+        return live if live else [supported[0]]
+    except Exception:
+        return [supported[0]]
 
 
 def _call_groq_chat(messages: list[dict], model_name: str) -> str:
