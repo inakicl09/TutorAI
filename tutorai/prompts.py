@@ -192,6 +192,39 @@ def build_material_context_prompt(retrieved_chunks: list[str]) -> str:
     )
 
 
+def build_chat_summary_prompt(grade: str, subject: str, language: str, transcript: str) -> str:
+    """One-shot prompt that asks the model to boil a student's chat session
+    down to 5 key points. Used by chat.summarize_chat."""
+    if language == "es":
+        return (
+            f"Esta es una conversación de estudio sobre {subject} ({grade}). "
+            "Resume los 5 conceptos o puntos clave que el alumno ha trabajado, "
+            "en formato de lista numerada. Sé conciso y específico a lo tratado.\n\n"
+            f"Conversación:\n{transcript}\n\nResumen en 5 puntos:"
+        )
+    return (
+        f"This is a study conversation about {subject} ({grade}). "
+        "Summarize the 5 key concepts or main points the student worked on, "
+        "as a numbered list. Be concise and specific to what was actually discussed.\n\n"
+        f"Conversation:\n{transcript}\n\nSummary in 5 points:"
+    )
+
+
+def build_question_bank_context(questions: list[dict]) -> str:
+    """Format a teacher's saved question-bank questions for inclusion in a
+    Logos prompt, so Logos knows about them when drafting a new test."""
+    if not questions:
+        return ""
+    lines = [
+        "The teacher has saved the following questions in their question bank. "
+        "Consider using or building on them in the test you draft:\n"
+    ]
+    for i, q in enumerate(questions, 1):
+        lines.append(f"{i}. {q['question_text']}")
+        lines.append(f"   Correct answer: {q['answer_text']}")
+    return "\n".join(lines)
+
+
 QUESTION_SEPARATOR = "###"
 
 

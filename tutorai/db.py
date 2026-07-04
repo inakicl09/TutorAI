@@ -182,6 +182,22 @@ def init_db() -> None:
                 username TEXT NOT NULL REFERENCES users(username),
                 created_at TEXT NOT NULL
             );
+
+            -- Individual questions a teacher saves for reuse (see
+            -- questions.py). Logos can reference these when starting a
+            -- new test-drafting chat for the matching grade+subject.
+            -- ON DELETE CASCADE keeps the bank tidy if a teacher account
+            -- is ever deleted.
+            CREATE TABLE IF NOT EXISTS question_bank (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                teacher_username TEXT NOT NULL
+                    REFERENCES users(username) ON DELETE CASCADE,
+                grade TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                question_text TEXT NOT NULL,
+                answer_text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
 

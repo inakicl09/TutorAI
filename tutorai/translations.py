@@ -216,6 +216,34 @@ TEXT = {
             "Comprueba el archivo .env y vuelve a intentarlo."
         ),
         "cli_ollama_disconnected": "Tutor: No puedo conectar con Groq. Comprueba tu conexión a internet.",
+        # Session timer
+        "stat_session_time": "Tiempo de estudio",
+        # Chat summary
+        "summarize_chat_button": "Resumir este chat",
+        "summarize_header": "Resumen del chat",
+        "summarizing_spinner": "Generando resumen...",
+        "summary_too_short_error": "Necesitas al menos 2 mensajes para generar un resumen.",
+        # Progress screen
+        "screen_progress": "Mi progreso",
+        "stats_total_messages": "Mensajes enviados",
+        "stats_messages_by_subject": "Mensajes por asignatura",
+        "stats_weekly_activity": "Actividad por semana",
+        "stats_no_activity": "Aún no tienes actividad registrada.",
+        "stats_most_active_subject": "Asignatura más trabajada",
+        # Question bank screen (teacher)
+        "screen_question_bank": "Banco de preguntas",
+        "save_question_header": "Añadir pregunta al banco",
+        "question_text_label": "Enunciado de la pregunta",
+        "answer_text_label": "Respuesta correcta",
+        "save_question_button": "Guardar pregunta",
+        "question_saved_message": "Pregunta guardada.",
+        "your_questions_header": "Tus preguntas guardadas",
+        "no_questions_message": "Aún no has guardado ninguna pregunta.",
+        "delete_question_button": "Eliminar",
+        "question_deleted_message": "Pregunta eliminada.",
+        "question_bank_grade_filter": "Filtrar por curso",
+        "question_bank_subject_filter": "Filtrar por asignatura",
+        "question_bank_all_option": "Todas",
     },
     "en": {
         "app_title": "TutorAI: your Socratic tutor",
@@ -421,5 +449,33 @@ TEXT = {
             "Check your .env file and try again."
         ),
         "cli_ollama_disconnected": "Tutor: I can't reach Groq. Check your internet connection.",
+        # Session timer
+        "stat_session_time": "Study time",
+        # Chat summary
+        "summarize_chat_button": "Summarise this chat",
+        "summarize_header": "Chat summary",
+        "summarizing_spinner": "Generating summary...",
+        "summary_too_short_error": "You need at least 2 messages to generate a summary.",
+        # Progress screen
+        "screen_progress": "My progress",
+        "stats_total_messages": "Messages sent",
+        "stats_messages_by_subject": "Messages by subject",
+        "stats_weekly_activity": "Activity by week",
+        "stats_no_activity": "No activity recorded yet.",
+        "stats_most_active_subject": "Most studied subject",
+        # Question bank screen (teacher)
+        "screen_question_bank": "Question bank",
+        "save_question_header": "Add a question to the bank",
+        "question_text_label": "Question text",
+        "answer_text_label": "Correct answer",
+        "save_question_button": "Save question",
+        "question_saved_message": "Question saved.",
+        "your_questions_header": "Your saved questions",
+        "no_questions_message": "You haven't saved any questions yet.",
+        "delete_question_button": "Delete",
+        "question_deleted_message": "Question deleted.",
+        "question_bank_grade_filter": "Filter by grade",
+        "question_bank_subject_filter": "Filter by subject",
+        "question_bank_all_option": "All",
     },
 }

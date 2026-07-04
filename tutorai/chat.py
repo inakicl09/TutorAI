@@ -39,7 +39,14 @@ def get_available_models() -> list[str]:
     """
     supported = [
         "llama-3.3-70b-versatile",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "llama-3.1-70b-versatile",
         "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "deepseek-r1-distill-llama-70b",
+        "qwen-qwq-32b",
         "mixtral-8x7b-32768",
         "gemma2-9b-it",
     ]
@@ -53,10 +60,16 @@ def get_available_models() -> list[str]:
 
 
 def _call_groq_chat(messages: list[dict], model_name: str) -> str:
-    """Send a list of messages to Groq and return the reply text."""
+    """Send a list of messages to Groq and return the reply text.
+
+    Strips all fields except role/content before sending -- Groq rejects
+    any extra properties (e.g. created_at stored by chat_storage) with a
+    400 Bad Request.
+    """
+    clean = [{"role": m["role"], "content": m["content"]} for m in messages]
     response = _get_client().chat.completions.create(
         model=model_name,
-        messages=messages,
+        messages=clean,
     )
     return response.choices[0].message.content
 
@@ -138,6 +151,33 @@ def ask_logos_with_material(
     conversation_history.append({"role": "assistant", "content": reply})
 
     return reply
+
+
+def summarize_chat(
+    conversation_history: list[dict],
+    grade: str,
+    subject: str,
+    language: str,
+    model_name: str = config.CHAT_MODEL_NAME,
+) -> str | None:
+    """One-shot summary of a student's conversation -- does NOT modify
+    conversation_history. Returns None if there aren't enough user messages
+    to summarise yet."""
+    user_messages = [m for m in conversation_history if m["role"] == "user"]
+    if len(user_messages) < 2:
+        return None
+
+    transcript_parts = []
+    for msg in conversation_history:
+        if msg["role"] == "system":
+            continue
+        role_label = ("Alumno" if language == "es" else "Student") if msg["role"] == "user" else "Tutor"
+        transcript_parts.append(f"{role_label}: {msg['content']}")
+
+    summary_prompt = prompts.build_chat_summary_prompt(
+        grade, subject, language, "\n\n".join(transcript_parts)
+    )
+    return _call_groq_chat([{"role": "user", "content": summary_prompt}], model_name)
 
 
 def generate_structured_test(
