@@ -198,6 +198,68 @@ def init_db() -> None:
                 answer_text TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+
+            -- A note a student saves from an assistant message in chat
+            -- (see notes.py). Keyed by subject so the Notes screen can
+            -- filter by subject.
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_username TEXT NOT NULL
+                    REFERENCES users(username) ON DELETE CASCADE,
+                grade TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            -- A short message a teacher posts to one of their classes
+            -- (see announcements.py). Students linked to that
+            -- teacher+grade+subject see it on their main menu.
+            CREATE TABLE IF NOT EXISTS announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                teacher_username TEXT NOT NULL
+                    REFERENCES users(username) ON DELETE CASCADE,
+                grade TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            -- One study goal per student per grade+subject (see goals.py).
+            -- UNIQUE constraint lets us upsert with INSERT OR REPLACE.
+            CREATE TABLE IF NOT EXISTS study_goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_username TEXT NOT NULL
+                    REFERENCES users(username) ON DELETE CASCADE,
+                grade TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                goal_text TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (student_username, grade, subject)
+            );
+
+            -- A freeform exercise a teacher publishes to one of their
+            -- classes (see exercises.py). Students linked to that class
+            -- see it in their Exercises screen and can send it to
+            -- Socrates with one click.
+            CREATE TABLE IF NOT EXISTS exercises (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                teacher_username TEXT NOT NULL
+                    REFERENCES users(username) ON DELETE CASCADE,
+                grade TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS bug_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                role TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
 

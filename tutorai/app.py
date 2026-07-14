@@ -20,13 +20,17 @@ import pandas as pd
 import streamlit as st
 
 from tutorai import (
+    announcements,
     chat,
     chat_storage,
     classes,
     config,
     db,
     exams,
+    exercises,
+    goals,
     homerooms,
+    notes,
     prompts,
     questions,
     rag,
@@ -171,6 +175,7 @@ else:
             ("add_user", "add_user_header"),
             ("teachers", "admin_teachers_menu_header"),
             ("students", "admin_students_menu_header"),
+            ("bug_reports", "screen_bug_reports"),
             ("artemis", "screen_artemis"),
         ],
         "teacher": [
@@ -179,10 +184,14 @@ else:
             ("my_classes", "screen_my_classes"),
             ("tests", "screen_logos"),
             ("question_bank", "screen_question_bank"),
+            ("announcements", "screen_announcements"),
+            ("exercises", "screen_exercises"),
         ],
         "student": [
             ("main_menu", "screen_main_menu"),
             ("chat", "screen_chat"),
+            ("exercises", "screen_exercises"),
+            ("notes", "screen_notes"),
             ("progress", "screen_progress"),
             ("link_teacher", "screen_link_teacher"),
             ("material", "screen_material"),
@@ -192,21 +201,70 @@ else:
     }
 
     with st.sidebar:
-        st.write(f"{text['logged_in_as']} **{st.session_state.username}** ({text[f'role_{role}']})")
-        if st.button(text["logout_button"]):
-            log_out()
-            st.rerun()
+        user_col, logout_col = st.columns([3, 1])
+        with user_col:
+            st.write(f"**{st.session_state.username}** ({text[f'role_{role}']})")
+        with logout_col:
+            if st.button("↩", help=text["logout_button"], key="logout_btn"):
+                log_out()
+                st.rerun()
+
+        st.divider()
 
         screen_ids = [screen_id for screen_id, _ in SCREENS_BY_ROLE[role]]
         screen_labels = [text[label_key] for _, label_key in SCREENS_BY_ROLE[role]]
-        chosen_screen_label = st.radio(text["screen_nav_label"], screen_labels, key="screen_nav")
+
+        # pending_screen_id is set by quick-nav buttons BEFORE this widget is drawn,
+        # so we can safely pre-select the right radio option without touching the
+        # widget's key after instantiation (which Streamlit forbids).
+        pending_sid = st.session_state.pop("pending_screen_id", None)
+        default_screen_idx = (
+            screen_ids.index(pending_sid)
+            if pending_sid and pending_sid in screen_ids
+            else 0
+        )
+
+        chosen_screen_label = st.radio(
+            text["screen_nav_label"],
+            screen_labels,
+            index=default_screen_idx,
+            key="screen_nav",
+        )
         screen = screen_ids[screen_labels.index(chosen_screen_label)]
 
         if role == "student":
             elapsed_secs = int(time.time() - st.session_state.session_start_time)
             elapsed_mins = elapsed_secs // 60
-            session_str = f"< 1 min" if elapsed_mins == 0 else f"{elapsed_mins} min"
+            session_str = "< 1 min" if elapsed_mins == 0 else f"{elapsed_mins} min"
             st.caption(f"⏱ {text['stat_session_time']}: {session_str}")
+
+        st.divider()
+        with st.expander(text["report_bug_header"]):
+            bug_desc = st.text_area(
+                text["report_bug_label"], key="bug_report_input", label_visibility="collapsed"
+            )
+            if st.button(text["report_bug_button"], key="bug_report_submit"):
+                if bug_desc.strip():
+                    from datetime import datetime as _dt, timezone as _tz
+                    conn = db.get_connection()
+                    try:
+                        conn.execute(
+                            "INSERT INTO bug_reports (username, role, description, created_at) "
+                            "VALUES (?, ?, ?, ?)",
+                            (
+                                st.session_state.username,
+                                role,
+                                bug_desc.strip(),
+                                _dt.now(_tz.utc).isoformat(),
+                            ),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    st.success(text["report_bug_success"])
+                    st.rerun()
+                else:
+                    st.error(text["report_bug_empty_error"])
 
     st.title(config.ASSISTANT_NAMES[role])
 
@@ -577,6 +635,26 @@ else:
 
                         render_change_password_and_delete(student_username, text)
 
+        elif screen == "bug_reports":
+            st.header(text["bug_reports_header"])
+            conn = db.get_connection()
+            try:
+                bug_rows = conn.execute(
+                    "SELECT * FROM bug_reports ORDER BY created_at DESC"
+                ).fetchall()
+            finally:
+                conn.close()
+            if not bug_rows:
+                st.caption(text["no_bug_reports_message"])
+            else:
+                for br in bug_rows:
+                    label = (
+                        f"{text['bug_report_from']}: {br['username']} ({br['role']}) — "
+                        f"{br['created_at'][:10]}"
+                    )
+                    with st.expander(label):
+                        st.write(br["description"])
+
         else:  # screen == "artemis"
             if not st.session_state.artemis_chat_loaded:
                 existing_chats = chat_storage.load_chats(st.session_state.username)
@@ -654,6 +732,25 @@ else:
                     text["stat_tests_saved"],
                     len(exams.list_tests_for_teacher(st.session_state.username)),
                 )
+
+            st.divider()
+            quick_col1, quick_col2 = st.columns(2)
+            with quick_col1:
+                if st.button(
+                    f"📢 {text['screen_announcements']}",
+                    use_container_width=True,
+                    key="quick_announcements",
+                ):
+                    st.session_state.pending_screen_id = "announcements"
+                    st.rerun()
+            with quick_col2:
+                if st.button(
+                    f"📝 {text['screen_exercises']}",
+                    use_container_width=True,
+                    key="quick_exercises",
+                ):
+                    st.session_state.pending_screen_id = "exercises"
+                    st.rerun()
 
         elif screen == "supervise":
             st.header(text["your_students_header"])
@@ -1077,7 +1174,7 @@ else:
                             exams.delete_test(published_test["id"], st.session_state.username)
                             st.rerun()
 
-        else:  # screen == "question_bank"
+        elif screen == "question_bank":
             st.header(text["screen_question_bank"])
 
             st.subheader(text["save_question_header"])
@@ -1133,6 +1230,106 @@ else:
                             st.success(text["question_deleted_message"])
                             st.rerun()
 
+        elif screen == "announcements":
+            st.header(text["screen_announcements"])
+
+            # Pick a class for the new announcement
+            teacher_assignments = current_user.get("teaching", [])
+            if not teacher_assignments:
+                st.info(text["no_classes_message"] if "no_classes_message" in text else "No classes yet.")
+            else:
+                st.subheader(text["new_announcement_header"])
+                ann_options = [
+                    f"{a['subject']} — {a['grade']}" for a in teacher_assignments
+                ]
+                ann_selection = st.selectbox(
+                    text["grade_label"] + " / " + text["subject_label"],
+                    options=ann_options,
+                    key="ann_class_select",
+                )
+                ann_idx = ann_options.index(ann_selection)
+                ann_grade = teacher_assignments[ann_idx]["grade"]
+                ann_subject = teacher_assignments[ann_idx]["subject"]
+
+                ann_content = st.text_area(
+                    text["announcement_content_label"], key="ann_content"
+                )
+                if st.button(text["post_announcement_button"]):
+                    if ann_content.strip():
+                        announcements.save_announcement(
+                            st.session_state.username, ann_grade, ann_subject, ann_content.strip()
+                        )
+                        st.success(text["announcement_posted_message"])
+                        st.rerun()
+                    else:
+                        st.error(text["signup_missing_fields_error"])
+
+            st.subheader(text["your_announcements_header"])
+            teacher_anns = announcements.list_announcements_for_teacher(st.session_state.username)
+            if not teacher_anns:
+                st.caption(text["no_announcements_teacher_message"])
+            else:
+                for ann in teacher_anns:
+                    with st.expander(f"{ann['subject']} ({ann['grade']}) — {ann['created_at'][:10]}"):
+                        st.write(ann["content"])
+                        if st.button(
+                            text["delete_announcement_button"], key=f"del_ann_{ann['id']}"
+                        ):
+                            announcements.delete_announcement(ann["id"], st.session_state.username)
+                            st.success(text["announcement_deleted_message"])
+                            st.rerun()
+
+        elif screen == "exercises":
+            st.header(text["screen_exercises"])
+
+            teacher_assignments = current_user.get("teaching", [])
+            if not teacher_assignments:
+                st.info(text["no_classes_message"] if "no_classes_message" in text else "No classes yet.")
+            else:
+                st.subheader(text["new_exercise_header"])
+                ex_options = [
+                    f"{a['subject']} — {a['grade']}" for a in teacher_assignments
+                ]
+                ex_selection = st.selectbox(
+                    text["grade_label"] + " / " + text["subject_label"],
+                    options=ex_options,
+                    key="ex_class_select",
+                )
+                ex_idx = ex_options.index(ex_selection)
+                ex_grade = teacher_assignments[ex_idx]["grade"]
+                ex_subject = teacher_assignments[ex_idx]["subject"]
+
+                ex_title = st.text_input(text["exercise_title_label"], key="ex_title")
+                ex_content = st.text_area(text["exercise_content_label"], key="ex_content")
+                if st.button(text["publish_exercise_button"]):
+                    if ex_title.strip() and ex_content.strip():
+                        exercises.save_exercise(
+                            st.session_state.username,
+                            ex_grade,
+                            ex_subject,
+                            ex_title.strip(),
+                            ex_content.strip(),
+                        )
+                        st.success(text["exercise_published_message"])
+                        st.rerun()
+                    else:
+                        st.error(text["signup_missing_fields_error"])
+
+            st.subheader(text["your_exercises_header"])
+            teacher_exs = exercises.list_exercises_for_teacher(st.session_state.username)
+            if not teacher_exs:
+                st.caption(text["no_exercises_teacher_message"])
+            else:
+                for ex in teacher_exs:
+                    with st.expander(f"{ex['title']} — {ex['subject']} ({ex['grade']})"):
+                        st.write(ex["content"])
+                        if st.button(
+                            text["delete_exercise_button"], key=f"del_ex_{ex['id']}"
+                        ):
+                            exercises.delete_exercise(ex["id"], st.session_state.username)
+                            st.success(text["exercise_deleted_message"])
+                            st.rerun()
+
     else:  # role == "student"
         if not st.session_state.chats_loaded:
             st.session_state.chats = chat_storage.load_chats(st.session_state.username)
@@ -1149,6 +1346,15 @@ else:
                 st.metric(text["stat_linked_classes"], len(current_user["subject_links"]))
             with stat_columns[1]:
                 st.metric(text["stat_chats_started"], len(st.session_state.chats))
+
+            student_announcements = announcements.list_announcements_for_student(
+                st.session_state.username
+            )
+            if student_announcements:
+                st.subheader(text["announcements_header"])
+                for ann in student_announcements:
+                    with st.expander(f"📢 {ann['subject']} ({ann['grade']}) — {ann['created_at'][:10]}"):
+                        st.write(ann["content"])
 
         elif screen == "link_teacher":
             st.header(text["link_teacher_header"])
@@ -1302,14 +1508,79 @@ else:
                 None,
             )
 
+            # If the student arrived here via "Work with Socrates" from the
+            # exercises screen, auto-create a chat and pre-fill the message.
+            if st.session_state.get("prefill_exercise"):
+                prefill_ex = st.session_state.pop("prefill_exercise")
+                ex_grade = prefill_ex["grade"]
+                ex_subject = prefill_ex["subject"]
+                # Find an existing chat for this subject, or create one.
+                existing = next(
+                    (c for c in st.session_state.chats
+                     if c["grade"] == ex_grade and c["subject"] == ex_subject),
+                    None,
+                )
+                if existing is None:
+                    sp = prompts.build_system_prompt(ex_grade, ex_subject, language)
+                    existing = chat_storage.create_chat(
+                        st.session_state.username, ex_grade, ex_subject, sp
+                    )
+                    st.session_state.chats.append(existing)
+                st.session_state.active_chat_id = existing["id"]
+                st.session_state.prefill_exercise_text = (
+                    f"[{prefill_ex['title']}]\n\n{prefill_ex['content']}"
+                )
+
             if active_chat is None:
                 st.info(text["no_chats_message"])
             else:
                 st.subheader(f"{active_chat['subject']} ({active_chat['grade']})")
 
+                # Study goal
+                current_goal = goals.get_goal(
+                    st.session_state.username,
+                    active_chat["grade"],
+                    active_chat["subject"],
+                )
+                with st.expander(
+                    f"🎯 {text['current_goal_label']}: {current_goal or '—'}",
+                    expanded=False,
+                ):
+                    new_goal = st.text_input(
+                        text["study_goal_header"],
+                        value=current_goal or "",
+                        placeholder=text["study_goal_placeholder"],
+                        key=f"goal_input_{active_chat['id']}",
+                    )
+                    goal_col1, goal_col2 = st.columns(2)
+                    with goal_col1:
+                        if st.button(text["save_goal_button"], key=f"save_goal_{active_chat['id']}"):
+                            if new_goal.strip():
+                                goals.set_goal(
+                                    st.session_state.username,
+                                    active_chat["grade"],
+                                    active_chat["subject"],
+                                    new_goal.strip(),
+                                )
+                                st.success(text["goal_saved_message"])
+                                st.rerun()
+                    with goal_col2:
+                        if current_goal and st.button(
+                            text["clear_goal_button"], key=f"clear_goal_{active_chat['id']}"
+                        ):
+                            goals.delete_goal(
+                                st.session_state.username,
+                                active_chat["grade"],
+                                active_chat["subject"],
+                            )
+                            st.success(text["goal_cleared_message"])
+                            st.rerun()
+
+                # Summarise + export buttons
                 user_msgs_in_chat = [m for m in active_chat["history"] if m["role"] == "user"]
-                if user_msgs_in_chat:
-                    if st.button(
+                action_cols = st.columns(2)
+                with action_cols[0]:
+                    if user_msgs_in_chat and st.button(
                         text["summarize_chat_button"],
                         key=f"summarize_{active_chat['id']}",
                     ):
@@ -1329,14 +1600,57 @@ else:
                                 st.write(chat_summary)
                         else:
                             st.warning(text["summary_too_short_error"])
+                with action_cols[1]:
+                    if user_msgs_in_chat:
+                        export_lines = [
+                            f"=== {active_chat['subject']} ({active_chat['grade']}) ===\n"
+                        ]
+                        for m in active_chat["history"]:
+                            if m["role"] == "system":
+                                continue
+                            role_label = (
+                                st.session_state.username
+                                if m["role"] == "user"
+                                else config.ASSISTANT_NAMES["student"]
+                            )
+                            export_lines.append(f"{role_label}: {m['content']}\n")
+                        export_text = "\n".join(export_lines)
+                        st.download_button(
+                            label=text["export_chat_button"],
+                            data=export_text,
+                            file_name=f"chat_{active_chat['id']}.txt",
+                            mime="text/plain",
+                            key=f"export_{active_chat['id']}",
+                        )
 
-                for message in active_chat["history"]:
+                # Chat messages with per-reply "Save note" button
+                for msg_idx, message in enumerate(active_chat["history"]):
                     if message["role"] == "system":
                         continue
                     with st.chat_message(message["role"]):
                         st.write(message["content"])
+                        if message["role"] == "assistant":
+                            if st.button(
+                                text["save_note_button"],
+                                key=f"note_{active_chat['id']}_{msg_idx}",
+                            ):
+                                notes.save_note(
+                                    st.session_state.username,
+                                    active_chat["grade"],
+                                    active_chat["subject"],
+                                    message["content"],
+                                )
+                                st.success(text["note_saved_message"])
 
-                student_message = st.chat_input(text["chat_placeholder"])
+                # Pre-filled exercise text (from Exercises screen)
+                prefill_text = st.session_state.pop("prefill_exercise_text", None)
+
+                student_message = st.chat_input(
+                    text["chat_placeholder"],
+                    key="chat_input_main",
+                )
+                if prefill_text and not student_message:
+                    student_message = prefill_text
 
                 if student_message:
                     with st.chat_message("user"):
@@ -1502,4 +1816,56 @@ else:
 
                         if st.button(text["got_it_button"], key=f"got_it_{flashcard['id']}"):
                             exams.delete_flashcard(flashcard["id"], st.session_state.username)
+                            st.rerun()
+
+        elif screen == "exercises":
+            st.header(text["screen_exercises"])
+            st.caption(text["exercises_hint"])
+            student_exs = exercises.list_exercises_for_student(st.session_state.username)
+            if not student_exs:
+                st.caption(text["no_exercises_student_message"])
+            else:
+                st.subheader(text["available_exercises_header"])
+                for ex in student_exs:
+                    with st.expander(f"{ex['title']} — {ex['subject']} ({ex['grade']})"):
+                        st.write(ex["content"])
+                        if st.button(
+                            text["work_exercise_button"], key=f"work_ex_{ex['id']}"
+                        ):
+                            st.session_state.prefill_exercise = {
+                                "grade": ex["grade"],
+                                "subject": ex["subject"],
+                                "title": ex["title"],
+                                "content": ex["content"],
+                            }
+                            st.session_state.pending_screen_id = "chat"
+                            st.rerun()
+
+        elif screen == "notes":
+            st.header(text["screen_notes"])
+            filter_opts = [text["all_subjects_option"]] + [
+                lnk["subject"] for lnk in current_user.get("subject_links", [])
+            ]
+            note_subject_filter = st.selectbox(
+                text["filter_notes_label"], options=filter_opts, key="note_filter"
+            )
+            subject_arg = (
+                None if note_subject_filter == text["all_subjects_option"] else note_subject_filter
+            )
+            student_note_list = notes.list_notes_for_student(
+                st.session_state.username, subject=subject_arg
+            )
+            if not student_note_list:
+                st.caption(text["no_notes_message"])
+            else:
+                st.subheader(text["notes_header"])
+                for note in student_note_list:
+                    header = f"{note['subject']} ({note['grade']}) — {note['created_at'][:10]}"
+                    with st.expander(header):
+                        st.write(note["content"])
+                        if st.button(
+                            text["delete_note_button"], key=f"del_note_{note['id']}"
+                        ):
+                            notes.delete_note(note["id"], st.session_state.username)
+                            st.success(text["note_deleted_message"])
                             st.rerun()
