@@ -7,6 +7,8 @@ A system prompt is built from three pieces:
 - LANGUAGE_INSTRUCTIONS: which language to reply in.
 """
 
+from tutorai import artemis_actions
+
 COMMON_RULES = """Rules you must always follow:
 - Never state the final answer or solve the exercise for the student.
 - Respond mostly with guiding questions that push the student to examine
@@ -147,7 +149,9 @@ def build_logos_analysis_prompt(
 def build_artemis_system_prompt(language: str) -> str:
     """System prompt for Artemis, the admin-facing assistant. Unlike
     Socrates/Logos, Artemis isn't tied to a grade or subject -- it helps
-    with running the platform itself."""
+    with running the platform itself, and unlike either of them, it can
+    propose admin actions (see artemis_actions.py) for the human admin
+    to confirm."""
     return (
         "You are Artemis, an assistant that helps the administrator of "
         "TutorAI, a Socratic tutoring platform for Spanish secondary "
@@ -160,6 +164,9 @@ def build_artemis_system_prompt(language: str) -> str:
         "- If a question requires data you don't have (e.g. exact current "
         "user counts), say so instead of guessing, and suggest where in "
         "the admin dashboard they could find it.\n\n"
+        "Here is the full list of admin actions you are able to propose:\n"
+        f"{artemis_actions.build_abilities_reference()}\n\n"
+        f"{artemis_actions.build_action_format_instructions()}\n\n"
         f"{LANGUAGE_INSTRUCTIONS[language]}"
     )
 

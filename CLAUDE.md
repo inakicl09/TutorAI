@@ -136,6 +136,21 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   run, `app.py` checks the URL for a token and resolves it back to a
   username before showing the login screen. `users.delete_user` cleans
   up a deleted account's sessions too.
+- `artemis_actions.py` — the admin actions Artemis (the admin-facing
+  assistant) is allowed to propose, and the machinery to parse and run
+  them safely. `ABILITIES` is a fixed list (name, description, params)
+  -- never more than what the regular admin dashboard can already do,
+  and no admin-account creation -- rendered as text two ways:
+  `build_abilities_reference()` (baked into Artemis's system prompt by
+  `prompts.build_artemis_system_prompt`, and also shown to the human
+  admin in `app.py`'s "What can Artemis do?" expander) and
+  `build_action_format_instructions()` (the strict
+  `ACTION: name\nPARAM_x: value\nEND_ACTION` format Artemis must use to
+  propose one). `parse_proposed_action` regex-parses that format out of
+  a reply; `execute_action` is the only thing that actually runs one,
+  called from `app.py` only after the admin clicks a confirm button --
+  Artemis can propose an action, never execute one itself. Refuses to
+  let Artemis delete the currently-logged-in admin's own account.
 - `app.py` — login/signup gate (role choice: student or teacher; no admin
   signup path). Once logged in, the sidebar (below the logged-in-as/logout
   controls) has a `st.radio` screen picker, `SCREENS_BY_ROLE`, so each
@@ -200,11 +215,39 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     homerooms stats), *Add user* (student or teacher), *Teachers* menu
     (filter by grade, search by username), *Students* menu (filter by
     grade, filter by class, search by username — filters apply together
-    with AND logic), *Artemis* (a single persistent chat, no RAG, no
+    with AND logic), and *Artemis* (a single persistent chat, no RAG, no
     grade/subject — `prompts.build_artemis_system_prompt` /
     `chat.ask_assistant`; the chats table needs a non-null grade/subject
     so this uses the sentinel values `"Admin"`/`"Artemis"`, set once in
-    `app.py`). Teacher/student entries show full teaching/link
+    `app.py`). Artemis is reached through its own sidebar button below a
+    divider, deliberately *not* one more option in the management
+    radio above it — it's a different kind of feature (an assistant
+    that can act on the admin's behalf) from the CRUD screens, and the
+    nav code keeps `st.session_state.admin_screen` separate from that
+    radio's own widget state, switching out of Artemis mode only via the
+    radio's `on_change` (comparing the radio's return value against the
+    current screen on every rerun doesn't work, since a widget the user
+    didn't touch this run still returns its last-remembered value, which
+    would otherwise silently kick the admin back to a management screen
+    on the very next rerun — e.g. the moment they send an Artemis chat
+    message). Artemis can also perform admin actions (see
+    `artemis_actions.py`): its system prompt is given the full list of
+    admin abilities (create/delete a user, reset a password, add a
+    teaching assignment, link/unlink a student, regenerate a join code —
+    deliberately never more than what the regular admin UI can already
+    do, and never account creation for another admin) plus the exact
+    `ACTION: .../END_ACTION` text format to request one in. `app.py`
+    parses that format out of its reply (`artemis_actions.parse_proposed_action`)
+    and runs it immediately via `artemis_actions.execute_action`,
+    appending the result (success or failure) as Artemis's own follow-up
+    chat message -- no separate confirm step, per the user's explicit
+    ask ("it needs to be so I can ask the AI to do it and it can do it,
+    not just that it tells me how to do it"). The only safeguard left is
+    `execute_action` refusing to let Artemis delete the currently-logged-in
+    admin's own account. The same abilities list is shown to the admin
+    too, in an in-page "What can Artemis do?" expander, so it's not just
+    hidden context the model has access to. Teacher/student entries show
+    full teaching/link
     lists (with per-link remove buttons and an admin-initiated link
     form), the actual password (see the security note below), plus
     shared password-change and delete-with-confirm controls
@@ -380,6 +423,54 @@ confirming `./run.sh` still starts cleanly.
   from one class to another (`users.move_student_link`: links the new
   class first, raising if invalid, before unlinking the old one, so a
   bad move never leaves the student with neither).
+- Artemis moved out of the admin management radio into its own sidebar
+  button below a divider (user's explicit ask: keep it "separate to
+  other features in the admin UI"), and got the ability to actually
+  perform admin actions, not just talk about them (user's explicit ask).
+  Considered Ollama's native tool-calling for this, but rejected it: the
+  project already hit one case of a small local model (Mistral via
+  Ollama) ignoring format instructions when there's no user turn to
+  anchor them (see the structured-test decision below), so a hand-rolled
+  strict text format parsed with the same regex approach as
+  `exams.parse_structured_test` was judged more reliable on this
+  hardware than depending on a model-specific tool-calling feature.
+  First built with a confirm/cancel button before any action ran (mirroring
+  the project's existing confirm-before-delete pattern), but the user
+  explicitly rejected that: "it needs to be so I can ask the AI to do it
+  and it can do it, not just that it tells me how to do it." So
+  `app.py`'s `run_proposed_artemis_action` now calls
+  `artemis_actions.execute_action` immediately once Artemis's reply
+  contains a parseable `ACTION: .../END_ACTION` block, with the result
+  (success or failure) appended as Artemis's own follow-up chat message
+  -- no human approval step. The remaining safeguard is structural, not
+  a confirmation step: the ability list itself is a strict subset of
+  what the admin dashboard can already do (no admin-account creation),
+  and `execute_action` separately refuses to delete the
+  currently-logged-in admin's own account, so Artemis still can't do
+  anything a human admin couldn't already do through the UI -- it just
+  no longer needs a click to do it.
+- `artemis_actions.parse_proposed_action`'s regex was initially strict
+  (required a literal `ACTION:` prefix and `END_ACTION` terminator,
+  exact-case `PARAM_` keys), and silently failed on real Mistral output
+  -- tested live against a running Ollama instance (not just mocked),
+  Mistral wrote the bare ability name with no `ACTION:` prefix and no
+  `END_ACTION` line at all, so the original regex never matched and
+  "do it for me" requests did nothing with no visible error. Rewritten
+  to only require the ability name to start a line (after an optional
+  `ACTION:` prefix), case-insensitively, and to collect `PARAM_` lines
+  immediately after it until a blank line, an unrelated line, or
+  `END_ACTION` -- the same "tolerate a small local model not complying
+  perfectly" philosophy as `exams.parse_structured_test`. That same live
+  test also surfaced a second, more serious gap: Mistral wrote the grade
+  as "1er ESO" instead of the official "1º ESO", and nothing validated
+  it -- `users.create_student`/`homerooms.assign_homeroom` happily store
+  whatever grade string they're given, which would have crashed
+  `users.allowed_link_grades` (it indexes into `subjects.GRADES`) the
+  first time anyone tried to link that student to a teacher. Fixed with
+  `artemis_actions._validate_grade`/`_validate_subject`, called before
+  `create_student`, `add_teaching_assignment`, and
+  `link_student_to_teacher` -- an invalid grade or subject now fails
+  with a clear message instead of corrupting a user record.
 
 ## Known gotcha: hardware constraints on local generation
 

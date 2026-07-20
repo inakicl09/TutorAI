@@ -59,6 +59,9 @@ TEXT = {
         "artemis_intro_message": (
             "Pregúntame lo que necesites sobre la gestión de la plataforma."
         ),
+        "artemis_abilities_header": "¿Qué puede hacer Artemis?",
+        "action_completed_message": "Acción completada: {summary}",
+        "action_failed_error": "No se pudo completar la acción: {error}",
         "save_test_header": "Guardar este examen",
         "test_title_label": "Título del examen",
         "save_test_button": "Guardar como examen",
@@ -358,6 +361,9 @@ TEXT = {
         ),
         "screen_artemis": "Artemis",
         "artemis_intro_message": "Ask me anything about managing the platform.",
+        "artemis_abilities_header": "What can Artemis do?",
+        "action_completed_message": "Action completed: {summary}",
+        "action_failed_error": "Could not complete the action: {error}",
         "save_test_header": "Save this test",
         "test_title_label": "Test title",
         "save_test_button": "Save as test",
