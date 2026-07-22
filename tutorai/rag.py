@@ -16,11 +16,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from tutorai import config
 
 # NOTE: RecursiveCharacterTextSplitter and PyPDFLoader are imported lazily
-# inside add_pdf_to_vector_store because importing them currently pulls in
-# sentence_transformers, which fails on this machine's torch/transformers/numpy
-# version mix. Deferring keeps app startup working; the failure only surfaces
-# if someone actually uploads a PDF (fixable by running the package upgrade in
-# requirements.txt once the torch/numpy conflict is resolved).
+# inside add_pdf_to_vector_store to keep app startup fast -- they're only
+# needed when someone actually uploads a PDF.
 
 TEACHER_MATERIALS_COLLECTION = "teacher_materials"
 
