@@ -14,22 +14,15 @@ Run this in iTerm with: python3 -m streamlit run tutorai/app.py
 """
 
 import os
-<<<<<<< HEAD
 import time
-=======
-import urllib.error
 from typing import Optional
->>>>>>> d9798b3 (PDF functionality added)
 
 import pandas as pd
 import streamlit as st
 
 from tutorai import (
-<<<<<<< HEAD
     announcements,
-=======
     artemis_actions,
->>>>>>> d9798b3 (PDF functionality added)
     chat,
     chat_storage,
     classes,
@@ -173,42 +166,15 @@ else:
     current_user = users.get_user(st.session_state.username)
     role = current_user["role"]
 
-<<<<<<< HEAD
     if "session_start_time" not in st.session_state:
         st.session_state.session_start_time = time.time()
-=======
-# Each role's sidebar screens, in nav order. The label keys are looked up
-# in translations.py so the tab names follow the chosen UI language.
-# Artemis is deliberately NOT in the admin list below -- it gets its own
-# button past a divider in the sidebar (see the nav code), separate from
-# the day-to-day management screens, since it's a different kind of
-# feature (an assistant with its own ability to act, not a CRUD screen).
-SCREENS_BY_ROLE = {
-    "admin": [
-        ("main_menu", "screen_main_menu"),
-        ("add_user", "add_user_header"),
-        ("teachers", "admin_teachers_menu_header"),
-        ("students", "admin_students_menu_header"),
-    ],
-    "teacher": [
-        ("main_menu", "screen_main_menu"),
-        ("supervise", "screen_supervise"),
-        ("my_classes", "screen_my_classes"),
-        ("tests", "screen_logos"),
-    ],
-    "student": [
-        ("main_menu", "screen_main_menu"),
-        ("chat", "screen_chat"),
-        ("link_teacher", "screen_link_teacher"),
-        ("material", "screen_material"),
-        ("tests", "screen_student_tests"),
-        ("flashcards", "screen_flashcards"),
-    ],
-}
->>>>>>> d9798b3 (PDF functionality added)
 
     # Each role's sidebar screens, in nav order. The label keys are looked up
     # in translations.py so the tab names follow the chosen UI language.
+    # Artemis is deliberately NOT in the admin list below -- it gets its own
+    # button past a divider in the sidebar (see the nav code), separate from
+    # the day-to-day management screens, since it's a different kind of
+    # feature (an assistant with its own ability to act, not a CRUD screen).
     SCREENS_BY_ROLE = {
         "admin": [
             ("main_menu", "screen_main_menu"),
@@ -216,7 +182,6 @@ SCREENS_BY_ROLE = {
             ("teachers", "admin_teachers_menu_header"),
             ("students", "admin_students_menu_header"),
             ("bug_reports", "screen_bug_reports"),
-            ("artemis", "screen_artemis"),
         ],
         "teacher": [
             ("main_menu", "screen_main_menu"),
@@ -240,7 +205,6 @@ SCREENS_BY_ROLE = {
         ],
     }
 
-<<<<<<< HEAD
     with st.sidebar:
         user_col, logout_col = st.columns([3, 1])
         with user_col:
@@ -249,78 +213,73 @@ SCREENS_BY_ROLE = {
             if st.button("↩", help=text["logout_button"], key="logout_btn"):
                 log_out()
                 st.rerun()
-=======
-    screen_ids = [screen_id for screen_id, _ in SCREENS_BY_ROLE[role]]
-    screen_labels = [text[label_key] for _, label_key in SCREENS_BY_ROLE[role]]
-
-    if role == "admin":
-        # Artemis lives behind its own button, past a divider, instead of
-        # being one more option in the management radio above -- it's a
-        # different kind of feature (an assistant that can act on the
-        # admin's behalf), not another CRUD screen. A radio widget always
-        # reports its last-remembered value on every rerun, even reruns
-        # the user triggered some other way (e.g. sending an Artemis chat
-        # message) -- so switching away from "artemis" must only happen
-        # through this radio's own on_change, never by comparing its
-        # return value against the current screen on every rerun.
-        if "admin_screen" not in st.session_state:
-            st.session_state.admin_screen = screen_ids[0]
-
-        def _switch_to_management_screen() -> None:
-            chosen_label = st.session_state["admin_management_nav"]
-            st.session_state.admin_screen = screen_ids[screen_labels.index(chosen_label)]
-
-        default_label = (
-            screen_labels[screen_ids.index(st.session_state.admin_screen)]
-            if st.session_state.admin_screen in screen_ids
-            else screen_labels[0]
-        )
-        st.radio(
-            text["screen_nav_label"],
-            screen_labels,
-            index=screen_labels.index(default_label),
-            key="admin_management_nav",
-            on_change=_switch_to_management_screen,
-        )
-
-        st.divider()
-        if st.button(f"🤖 {text['screen_artemis']}", key="artemis_nav_button", use_container_width=True):
-            st.session_state.admin_screen = "artemis"
-
-        screen = st.session_state.admin_screen
-    else:
-        chosen_screen_label = st.radio(text["screen_nav_label"], screen_labels, key="screen_nav")
-        screen = screen_ids[screen_labels.index(chosen_screen_label)]
->>>>>>> d9798b3 (PDF functionality added)
 
         st.divider()
 
         screen_ids = [screen_id for screen_id, _ in SCREENS_BY_ROLE[role]]
         screen_labels = [text[label_key] for _, label_key in SCREENS_BY_ROLE[role]]
 
-        # pending_screen_id is set by quick-nav buttons BEFORE this widget is drawn,
-        # so we can safely pre-select the right radio option without touching the
-        # widget's key after instantiation (which Streamlit forbids).
-        pending_sid = st.session_state.pop("pending_screen_id", None)
-        default_screen_idx = (
-            screen_ids.index(pending_sid)
-            if pending_sid and pending_sid in screen_ids
-            else 0
-        )
+        if role == "admin":
+            # Artemis lives behind its own button, past a divider, instead of
+            # being one more option in the management radio above -- it's a
+            # different kind of feature (an assistant that can act on the
+            # admin's behalf), not another CRUD screen. A radio widget always
+            # reports its last-remembered value on every rerun, even reruns
+            # the user triggered some other way (e.g. sending an Artemis chat
+            # message) -- so switching away from "artemis" must only happen
+            # through this radio's own on_change, never by comparing its
+            # return value against the current screen on every rerun.
+            if "admin_screen" not in st.session_state:
+                st.session_state.admin_screen = screen_ids[0]
 
-        chosen_screen_label = st.radio(
-            text["screen_nav_label"],
-            screen_labels,
-            index=default_screen_idx,
-            key="screen_nav",
-        )
-        screen = screen_ids[screen_labels.index(chosen_screen_label)]
+            def _switch_to_management_screen() -> None:
+                chosen_label = st.session_state["admin_management_nav"]
+                st.session_state.admin_screen = screen_ids[screen_labels.index(chosen_label)]
 
-        if role == "student":
-            elapsed_secs = int(time.time() - st.session_state.session_start_time)
-            elapsed_mins = elapsed_secs // 60
-            session_str = "< 1 min" if elapsed_mins == 0 else f"{elapsed_mins} min"
-            st.caption(f"⏱ {text['stat_session_time']}: {session_str}")
+            default_label = (
+                screen_labels[screen_ids.index(st.session_state.admin_screen)]
+                if st.session_state.admin_screen in screen_ids
+                else screen_labels[0]
+            )
+            st.radio(
+                text["screen_nav_label"],
+                screen_labels,
+                index=screen_labels.index(default_label),
+                key="admin_management_nav",
+                on_change=_switch_to_management_screen,
+            )
+
+            st.divider()
+            if st.button(
+                f"🤖 {text['screen_artemis']}", key="artemis_nav_button", use_container_width=True
+            ):
+                st.session_state.admin_screen = "artemis"
+
+            screen = st.session_state.admin_screen
+        else:
+            # pending_screen_id is set by quick-nav buttons BEFORE this widget is drawn,
+            # so we can safely pre-select the right radio option without touching the
+            # widget's key after instantiation (which Streamlit forbids).
+            pending_sid = st.session_state.pop("pending_screen_id", None)
+            default_screen_idx = (
+                screen_ids.index(pending_sid)
+                if pending_sid and pending_sid in screen_ids
+                else 0
+            )
+
+            chosen_screen_label = st.radio(
+                text["screen_nav_label"],
+                screen_labels,
+                index=default_screen_idx,
+                key="screen_nav",
+            )
+            screen = screen_ids[screen_labels.index(chosen_screen_label)]
+
+            if role == "student":
+                elapsed_secs = int(time.time() - st.session_state.session_start_time)
+                elapsed_mins = elapsed_secs // 60
+                session_str = "< 1 min" if elapsed_mins == 0 else f"{elapsed_mins} min"
+                st.caption(f"⏱ {text['stat_session_time']}: {session_str}")
 
         st.divider()
         with st.expander(text["report_bug_header"]):
@@ -352,8 +311,29 @@ SCREENS_BY_ROLE = {
 
     st.title(config.ASSISTANT_NAMES[role])
 
+    def run_proposed_artemis_action(reply: str, text: dict) -> Optional[str]:
+        """If Artemis's reply proposes an action, run it immediately and
+        return a result message to show/save as a follow-up chat message, or
+        None if the reply didn't propose anything. Artemis's ability list is
+        a strict subset of what the admin dashboard can already do (no
+        admin-account creation, and execute_action separately refuses to let
+        it delete the currently-logged-in admin's own account), so this never
+        gives Artemis more power than a human admin already has."""
+        action = artemis_actions.parse_proposed_action(reply)
+        if not action:
+            return None
 
-<<<<<<< HEAD
+        try:
+            extra = artemis_actions.execute_action(action, st.session_state.username)
+            summary = artemis_actions.describe_action(action)
+            message = text["action_completed_message"].format(summary=summary)
+            if extra:
+                message += f" ({extra})"
+            return message
+        except ValueError as error:
+            return text["action_failed_error"].format(error=error)
+
+
     def render_change_password_and_delete(username: str, text: dict) -> None:
         """Shared password-change and delete-with-confirm controls for any
         user, used by both the Teachers and Students admin screens."""
@@ -385,41 +365,6 @@ SCREENS_BY_ROLE = {
                 if st.button(text["cancel_button"], key=f"cancel_{username}"):
                     st.session_state[pending_delete_key] = False
                     st.rerun()
-=======
-def run_proposed_artemis_action(reply: str, text: dict) -> Optional[str]:
-    """If Artemis's reply proposes an action, run it immediately and
-    return a result message to show/save as a follow-up chat message, or
-    None if the reply didn't propose anything. Artemis's ability list is
-    a strict subset of what the admin dashboard can already do (no
-    admin-account creation, and execute_action separately refuses to let
-    it delete the currently-logged-in admin's own account), so this never
-    gives Artemis more power than a human admin already has."""
-    action = artemis_actions.parse_proposed_action(reply)
-    if not action:
-        return None
-
-    try:
-        extra = artemis_actions.execute_action(action, st.session_state.username)
-        summary = artemis_actions.describe_action(action)
-        message = text["action_completed_message"].format(summary=summary)
-        if extra:
-            message += f" ({extra})"
-        return message
-    except ValueError as error:
-        return text["action_failed_error"].format(error=error)
-
-
-def render_change_password_and_delete(username: str, text: dict) -> None:
-    """Shared password-change and delete-with-confirm controls for any
-    user, used by both the Teachers and Students admin screens."""
-    new_user_password = st.text_input(
-        text["new_password_label"], type="password", key=f"newpw_{username}"
-    )
-    if st.button(text["change_password_button"], key=f"changepw_{username}"):
-        if new_user_password:
-            users.set_password(username, new_user_password)
-            st.success(text["password_changed_message"])
->>>>>>> d9798b3 (PDF functionality added)
         else:
             if st.button(text["delete_user_button"], key=f"delete_{username}"):
                 st.session_state[pending_delete_key] = True
@@ -711,154 +656,9 @@ def render_change_password_and_delete(username: str, text: dict) -> None:
                                             except ValueError:
                                                 st.error(text["link_failed_error"])
 
-<<<<<<< HEAD
                         st.write(f"**{text['add_link_header']}**")
                         all_teacher_usernames = [
                             u["username"] for u in users.list_all_users(role="teacher")
-=======
-    else:  # screen == "artemis"
-        if not st.session_state.artemis_chat_loaded:
-            existing_chats = chat_storage.load_chats(st.session_state.username)
-            if existing_chats:
-                st.session_state.artemis_chat = existing_chats[0]
-            else:
-                artemis_system_prompt = prompts.build_artemis_system_prompt(language)
-                st.session_state.artemis_chat = chat_storage.create_chat(
-                    st.session_state.username, ARTEMIS_GRADE, ARTEMIS_SUBJECT, artemis_system_prompt
-                )
-            st.session_state.artemis_chat_loaded = True
-
-        with st.expander(text["artemis_abilities_header"]):
-            for ability in artemis_actions.ABILITIES:
-                params_text = ", ".join(ability["params"])
-                st.markdown(f"- **{ability['name']}** ({params_text}): {ability['description']}")
-
-        try:
-            artemis_available_models = chat.get_available_models()
-        except urllib.error.URLError:
-            if chat.is_ollama_installed():
-                st.error(text["ollama_unreachable"])
-            else:
-                st.error(text["ollama_not_installed"])
-            artemis_available_models = None
-
-        if artemis_available_models:
-            artemis_default_index = (
-                artemis_available_models.index(config.CHAT_MODEL_NAME)
-                if config.CHAT_MODEL_NAME in artemis_available_models
-                else 0
-            )
-            artemis_selected_model = st.selectbox(
-                text["model_label"],
-                artemis_available_models,
-                index=artemis_default_index,
-                key="artemis_model",
-            )
-
-            artemis_chat = st.session_state.artemis_chat
-            has_visible_messages = any(m["role"] != "system" for m in artemis_chat["history"])
-            if not has_visible_messages:
-                st.caption(text["artemis_intro_message"])
-
-            for message in artemis_chat["history"]:
-                if message["role"] == "system":
-                    continue
-                with st.chat_message(message["role"]):
-                    st.write(message["content"])
-
-            admin_message = st.chat_input(text["chat_placeholder"], key="artemis_chat_input")
-
-            if admin_message:
-                with st.chat_message("user"):
-                    st.write(admin_message)
-
-                try:
-                    with st.spinner(text["thinking_spinner"]):
-                        artemis_reply = chat.ask_assistant(
-                            artemis_chat["history"], admin_message, artemis_selected_model
-                        )
-                except urllib.error.URLError:
-                    st.error(text["ollama_disconnected"])
-                    st.stop()
-
-                with st.chat_message("assistant"):
-                    st.write(artemis_reply)
-
-                chat_storage.add_message(artemis_chat["id"], "user", admin_message)
-                chat_storage.add_message(artemis_chat["id"], "assistant", artemis_reply)
-
-                # If Artemis proposed an action, run it right away -- no
-                # separate confirm step -- and add the result as its own
-                # follow-up message so it's part of the saved transcript.
-                action_result = run_proposed_artemis_action(artemis_reply, text)
-                if action_result:
-                    with st.chat_message("assistant"):
-                        st.write(action_result)
-                    chat_storage.add_message(artemis_chat["id"], "assistant", action_result)
-                    artemis_chat["history"].append({"role": "assistant", "content": action_result})
-
-elif role == "teacher":
-    if screen == "main_menu":
-        st.write(text["welcome_message"].format(username=st.session_state.username))
-        st.write(f"{text['join_code_label']}: `{current_user['join_code']}`")
-
-        stat_columns = st.columns(3)
-        with stat_columns[0]:
-            st.metric(text["stat_classes_taught"], len(current_user["teaching"]))
-        with stat_columns[1]:
-            st.metric(
-                text["stat_students_linked"],
-                len(users.students_linked_to_teacher(st.session_state.username)),
-            )
-        with stat_columns[2]:
-            st.metric(
-                text["stat_tests_saved"],
-                len(exams.list_tests_for_teacher(st.session_state.username)),
-            )
-
-    elif screen == "supervise":
-        st.header(text["your_students_header"])
-        linked_students = users.students_linked_to_teacher(st.session_state.username)
-        if not linked_students:
-            st.caption(text["no_students_message"])
-        else:
-            for student_username in linked_students:
-                student_record = users.get_user(student_username)
-                relevant_links = [
-                    link
-                    for link in student_record["subject_links"]
-                    if link["teacher"] == st.session_state.username
-                ]
-                student_chats = chat_storage.load_chats(student_username)
-                relevant_chats = [
-                    c
-                    for c in student_chats
-                    if any(
-                        c["grade"] == link["grade"] and c["subject"] == link["subject"]
-                        for link in relevant_links
-                    )
-                ]
-                non_system_messages = [
-                    m for c in relevant_chats for m in c["history"] if m["role"] != "system"
-                ]
-                message_count = len(non_system_messages)
-                timestamps = [
-                    m["created_at"] for m in non_system_messages if m.get("created_at")
-                ]
-                last_active = max(timestamps) if timestamps else text["no_activity_yet"]
-
-                expander_label = (
-                    f"{student_username} — {text['messages_count_label']}: {message_count} · "
-                    f"{text['last_active_label']}: {last_active}"
-                )
-                with st.expander(expander_label):
-                    for link in relevant_links:
-                        st.write(f"**{link['subject']} ({link['grade']})**")
-                        matching_chats = [
-                            c
-                            for c in relevant_chats
-                            if c["grade"] == link["grade"] and c["subject"] == link["subject"]
->>>>>>> d9798b3 (PDF functionality added)
                         ]
                         if not all_teacher_usernames:
                             st.caption(text["no_teachers_found"])
@@ -932,6 +732,11 @@ elif role == "teacher":
                     )
                 st.session_state.artemis_chat_loaded = True
 
+            with st.expander(text["artemis_abilities_header"]):
+                for ability in artemis_actions.ABILITIES:
+                    params_text = ", ".join(ability["params"])
+                    st.markdown(f"- **{ability['name']}** ({params_text}): {ability['description']}")
+
             artemis_available_models = chat.get_available_models()
 
             if artemis_available_models:
@@ -978,6 +783,16 @@ elif role == "teacher":
 
                     chat_storage.add_message(artemis_chat["id"], "user", admin_message)
                     chat_storage.add_message(artemis_chat["id"], "assistant", artemis_reply)
+
+                    # If Artemis proposed an action, run it right away -- no
+                    # separate confirm step -- and add the result as its own
+                    # follow-up message so it's part of the saved transcript.
+                    action_result = run_proposed_artemis_action(artemis_reply, text)
+                    if action_result:
+                        with st.chat_message("assistant"):
+                            st.write(action_result)
+                        chat_storage.add_message(artemis_chat["id"], "assistant", action_result)
+                        artemis_chat["history"].append({"role": "assistant", "content": action_result})
 
     elif role == "teacher":
         if screen == "main_menu":

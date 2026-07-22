@@ -4,6 +4,8 @@ talks to Logos (teacher), which can optionally use a teacher's uploaded
 exam material as RAG context, and Artemis (admin), which never uses RAG.
 """
 
+from typing import Optional
+
 from openai import OpenAI
 
 from tutorai import config, prompts, rag
@@ -159,7 +161,7 @@ def summarize_chat(
     subject: str,
     language: str,
     model_name: str = config.CHAT_MODEL_NAME,
-) -> str | None:
+) -> Optional[str]:
     """One-shot summary of a student's conversation -- does NOT modify
     conversation_history. Returns None if there aren't enough user messages
     to summarise yet."""
