@@ -158,6 +158,19 @@ def init_db() -> None:
                 UNIQUE (test_id, student_username)
             );
 
+            -- One row per question in a student's submission, so a
+            -- teacher can review which specific questions were missed
+            -- (test_submissions only keeps the total score). Written
+            -- alongside test_submissions in exams.submit_test.
+            CREATE TABLE IF NOT EXISTS submission_answers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id INTEGER NOT NULL REFERENCES tests(id),
+                student_username TEXT NOT NULL REFERENCES users(username),
+                question_id INTEGER NOT NULL REFERENCES test_questions(id),
+                selected_option TEXT NOT NULL,
+                UNIQUE (test_id, student_username, question_id)
+            );
+
             -- One flashcard per question a student got wrong on a test,
             -- created automatically at submission time (see
             -- exams.submit_test). No LLM involved -- the question text

@@ -17,9 +17,31 @@ without a password.
 ## What this is
 
 A Socratic tutoring app for Spanish secondary school students (1º ESO to
-2º Bachillerato, Madrid LOMLOE curriculum), backed by a local Ollama model
-(no cloud API key needed) with RAG over student-uploaded PDFs, and three
-account types (student / teacher / admin) with role-based access.
+2º Bachillerato, Madrid LOMLOE curriculum), backed by the Groq API (cloud,
+requires a `GROQ_API_KEY`) with RAG over student-uploaded PDFs (embeddings
+run locally, no API key needed for that part), and three account types
+(student / teacher / admin) with role-based access.
+
+The project originally ran entirely on a local Ollama model — see "Known
+gotcha: hardware constraints on local generation" below, which describes
+that era, and the older decisions further down that reference Ollama
+(kept for history, not current behavior). It was later fully migrated to
+the Groq API (free tier, OpenAI-compatible via the `openai` SDK pointed
+at Groq's base URL) so the app works on any machine, not just ones with
+Ollama installed. Embeddings for RAG stayed local either way
+(`sentence-transformers`, `all-MiniLM-L6-v2`, via `HuggingFaceEmbeddings`
+— `OllamaEmbeddings` before the migration) — only chat generation moved
+to the cloud. `chat.is_ollama_installed()` was renamed
+`is_api_key_configured()` at the same time.
+
+Groq periodically deprecates/renames model IDs (this has already caused
+several "Groq isn't working" 404s — `chat.py`'s hardcoded `supported`
+list in `get_available_models()` silently falls back to `supported[0]`
+if none of its entries are live on the account, so a stale list fails
+with `model_not_found` rather than an obvious "outdated model list"
+error). If chat calls start 404ing, check `_get_client().models.list()`
+against the current `supported`/`CHAT_MODEL_NAME` before assuming
+anything else is wrong.
 
 Two interfaces share the same logic:
 - `tutorai/app.py` — Streamlit web UI (the main one, has the full
@@ -35,8 +57,10 @@ All app code lives in the `tutorai/` package (flat — no sub-packages),
 with a `tests/` directory alongside it (see "Testing" below). Modules
 import each other with absolute imports, e.g. `from tutorai import db`.
 
-- `config.py` — Ollama URLs, model names, file paths, RAG chunk settings,
-  the SQLite `DB_PATH`.
+- `config.py` — Groq API settings (`GROQ_API_KEY` loaded from `.env` via
+  `python-dotenv`, `GROQ_BASE_URL`), the default chat model name, the
+  local embedding model name, file paths, RAG chunk settings, the SQLite
+  `DB_PATH`.
 - `db.py` — single SQLite database (`data/tutorai.db`, gitignored).
   Tables: `users`, `homerooms`, `classes`, `teaching_assignments`,
   `subject_links`, `chats`, `chat_messages`, and a `tests` table that
@@ -101,19 +125,33 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `translations.py` — UI strings in Spanish/English for both `app.py` and
   `tutor.py`. Subject and grade names are NOT translated (they're official
   curriculum names, shown as-is regardless of UI language).
-- `rag.py` — PDF ingestion (chunk + embed with `nomic-embed-text` via
-  Ollama) and retrieval, persisted in chromaDB at `data/chroma_db`.
-  Takes an optional `collection_name`: student course material uses the
-  default collection, teacher exam material uses a separate one
-  (`TEACHER_MATERIALS_COLLECTION`), so the two can never mix.
-- `chat.py` — calls Ollama's `/api/chat`, combines retrieved chunks into
-  the prompt context, lists available models via `/api/tags` (filtering
-  out the embedding-only model since it can't chat). `is_ollama_installed()`
-  uses `shutil.which("ollama")` to tell "not installed" apart from
-  "installed but not running" when the connection fails, so the error
-  message can point to https://ollama.com/download specifically when
-  needed. `tutor.py` duplicates this one check (not the rest of chat.py)
-  to stay independent of `rag.py`'s heavier imports.
+- `rag.py` — PDF ingestion (chunk + embed locally with
+  `sentence-transformers`, `all-MiniLM-L6-v2`, via `HuggingFaceEmbeddings`
+  — no API key or Ollama involved) and retrieval, persisted in chromaDB at
+  `data/chroma_db`. Takes an optional `collection_name`: student course
+  material uses the default collection, teacher exam material uses a
+  separate one (`TEACHER_MATERIALS_COLLECTION`), so the two can never
+  mix. `retrieve_relevant_chunks` checks the collection's document count
+  first and returns `[]` immediately if it's empty, skipping the
+  embedding model load entirely rather than paying for it on every
+  RAG-less chat message.
+- `chat.py` — a single shared `openai.OpenAI` client pointed at Groq's
+  base URL (created lazily, since constructing it raises immediately if
+  `GROQ_API_KEY` is missing — importing `tutorai.chat` must not crash in
+  environments with no key set, like pytest). `_call_groq_chat` strips
+  every message down to `role`/`content` before sending (Groq 400s on
+  extra fields chat_storage rows carry, e.g. `created_at`); `ask_tutor`,
+  `ask_assistant`, `ask_logos_with_material`, `summarize_chat`, and
+  `generate_structured_test` all funnel through it.
+  `is_api_key_configured()` (renamed from the Ollama-era
+  `is_ollama_installed()`) just checks whether `config.GROQ_API_KEY` is
+  set. `get_available_models()` calls Groq's `models.list()` and
+  intersects it against a hardcoded `supported` list (only chat-capable
+  models this app is designed for — Groq's account also serves Whisper/
+  Orpheus speech models and a prompt-guard classifier, none of which work
+  through `chat.completions`), falling back to `supported[0]` if the
+  account has none of them. `tutor.py` now imports `chat` directly rather
+  than duplicating any check itself.
 - `chat_storage.py` — `create_chat(..., mode=None)` inserts a chat + its
   system message (`mode` is "draft"/"analyze" for Logos chats, NULL
   otherwise), `add_message(chat_id, role, content)` appends one message,
@@ -129,6 +167,13 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   Deliberately not named `tests.py`, so it doesn't read like the
   project's pytest suite (`tests/`, no `__init__.py`, just a sibling
   directory -- not an actual import collision, but a human-confusion one).
+  `submit_test` writes one row per question to `submission_answers`
+  (test_id, student_username, question_id, selected_option) alongside
+  the existing `test_submissions` total-score row, so
+  `get_submission_review(test_id, student_username)` can hand a teacher
+  the full per-question breakdown (question text/options, the student's
+  selected option, the correct one) instead of just a score.
+  `delete_test` cleans up `submission_answers` too.
 - `sessions.py` — persistent logins. `create_session(username)` makes a
   random token (`secrets.token_urlsafe`) and stores it in a `sessions`
   table; `get_username_for_token`/`delete_session`/
@@ -215,7 +260,10 @@ import each other with absolute imports, e.g. `from tutorai import db`.
       The parsed preview can then be published (`exams.publish_test`),
       which creates `test_questions` rows and makes the test visible to
       every student linked to that teacher for that grade+subject.
-      Published tests are listed with live submission counts/scores.
+      Published tests are listed with live submission counts/scores, each
+      submission expandable into a per-question review (✅/❌ per
+      question, the student's chosen option, and the correct one shown
+      only when they got it wrong) via `exams.get_submission_review`.
   - **admin** (Artemis): *Main menu* (total students/teachers/classes/
     homerooms stats), *Add user* (student or teacher), *Teachers* menu
     (filter by grade, search by username), *Students* menu (filter by
@@ -275,11 +323,12 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `tests/conftest.py` has an autouse fixture that points `config.DB_PATH`
   at a temp file and calls `db.init_db()` before every test, so the test
   suite never touches `data/tutorai.db`.
-- `rag.py` isn't unit tested — it needs a real Ollama embedding model
-  running, which isn't worth mocking for this project's size. `chat.py`'s
-  pure logic (filtering the embedding model out of `get_available_models`)
-  is tested with a mocked `urlopen`; `ask_tutor` (which also hits RAG) is
-  not.
+- `rag.py` isn't unit tested — it needs the real `sentence-transformers`
+  embedding model, which isn't worth mocking for this project's size.
+  `chat.py` talks to Groq over the network, so its tests mock
+  `tutorai.chat._client` (`unittest.mock`) instead of hitting the real
+  API; `ask_tutor` (which also hits RAG) is not tested for the same
+  reason as `rag.py` itself.
 - Run with: `pip install -r requirements-dev.txt && pytest`.
 - `app.py` itself has no pytest coverage (it's all Streamlit calls, not
   pure functions) — when restructuring its screens, it was instead
@@ -293,10 +342,15 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 
 ## Setup already done on this machine
 
-- Installed: streamlit, langchain, langchain-community, langchain-ollama,
-  langchain-chroma, chromadb, pypdf (see `requirements.txt`).
-- Pulled `nomic-embed-text` via `ollama pull` for embeddings.
-- `ollama serve` must be running for either interface to work.
+- Installed: streamlit, python-dotenv, langchain, langchain-community,
+  langchain-text-splitters, langchain-chroma, chromadb, pypdf,
+  cryptography, openai, sentence-transformers (see `requirements.txt`).
+- A `.env` file at the project root (gitignored) holds `GROQ_API_KEY` —
+  get a free key at https://console.groq.com and put it there; `config.py`
+  loads it via `python-dotenv` at startup, so no shell exporting needed.
+  No local model server (Ollama or otherwise) is required anymore — the
+  first PDF upload/search downloads the small (~22 MB) local embedding
+  model automatically.
 - No admin account exists yet — run `python3 -m tutorai.create_admin`
   once to create one.
 
@@ -353,16 +407,20 @@ confirming `./run.sh` still starts cleanly.
   has one-off top-up passes — `top_up_teacher_assignments` /
   `top_up_student_links` — so accounts seeded under the old, lower
   ranges still end up in the new ones after a re-run).
-- Ollama errors now distinguish "not installed" from "installed but not
-  running," pointing to https://ollama.com/download only in the former
-  case (`chat.is_ollama_installed()` / `tutor.is_ollama_installed()`),
-  since a student with no Ollama at all needs different instructions
-  than one who just hasn't run `ollama serve` yet.
+- Ollama errors used to distinguish "not installed" from "installed but
+  not running," pointing to https://ollama.com/download only in the
+  former case (`chat.is_ollama_installed()` / `tutor.is_ollama_installed()`),
+  since a student with no Ollama at all needed different instructions
+  than one who just hadn't run `ollama serve` yet. Superseded by the
+  Groq migration (see "What this is") — the check is now just
+  `chat.is_api_key_configured()` (is `GROQ_API_KEY` set?), since there's
+  no local install/server distinction to make with a cloud API.
 - Logos (teacher test-drafting chatbot) reuses `chat_storage.py` as-is
   for its conversations -- same `chats`/`chat_messages` tables as
   Socrates, just owned by a teacher's username instead of a student's,
-  since the schema never assumed a role. `chat.py`'s Ollama-call plumbing
-  was factored into a shared `_call_ollama_chat` helper so `ask_assistant`
+  since the schema never assumed a role. `chat.py`'s model-call plumbing
+  was factored into a shared helper (`_call_ollama_chat` at the time,
+  renamed `_call_groq_chat` in the later Groq migration) so `ask_assistant`
   doesn't duplicate `ask_tutor`'s request/response handling -- it just
   skips the RAG step entirely, per the earlier explicit instruction not
   to add RAG for teachers/admin yet.
@@ -483,22 +541,40 @@ confirming `./run.sh` still starts cleanly.
   `create_student`, `add_teaching_assignment`, and
   `link_student_to_teacher` -- an invalid grade or subject now fails
   with a clear message instead of corrupting a user record.
+- Per-question test review for teachers was added as a new
+  `submission_answers` table (one row per question per submission)
+  rather than reconstructing it after the fact, since `test_submissions`
+  only ever stored the total score -- there was no way to recover which
+  option a student picked for a specific question once submitted.
+  `submit_test` now writes a `submission_answers` row for every
+  question, not just the wrong ones (`flashcards` already covered wrong
+  answers specifically; this table needed the full picture, right
+  answers included, so review shows ✅ questions too). Submissions made
+  before this feature existed have no rows here --
+  `get_submission_review` returns `[]` for those, and the UI shows a
+  "no detailed answers were saved" caption instead of an empty-looking
+  blank.
 
-## Known gotcha: hardware constraints on local generation
+## Known gotcha: hardware constraints on local generation (historical, Ollama era)
+
+This section describes the original local-Ollama era and no longer
+applies to chat generation, which now runs on Groq's cloud hardware (see
+"What this is") -- `generate_structured_test` and every other chat call
+are no longer bounded by this machine's RAM, and `ollama ps` no longer
+applies to anything.
 
 This machine has 8GB RAM and no dedicated GPU (Apple M2, unified
-memory). Running Mistral (~5.3GB loaded) is already a significant
-fraction of that, so layering on a second model concurrently is
-expensive. `rag.retrieve_relevant_chunks` now checks
-`vector_store._collection.count()` and returns `[]` immediately if a
-collection is empty, skipping the embedding model load entirely instead
-of paying for it on every call when there's nothing to search (this cut
-`generate_structured_test`'s time from ~56s to ~47s on this machine when
-no exam material had been uploaded). Generating a multiple-choice test
-still reliably takes 30-60+ seconds even after that fix -- this is
-inherent to running a 7B model on this hardware, not a code bug. If
-generation feels like it's hanging, it's very likely still running
-rather than stuck; `ollama ps` can confirm a model is actively loaded.
+memory). Running Mistral (~5.3GB loaded) was already a significant
+fraction of that, so layering on a second model concurrently was
+expensive. That constraint is *why* `rag.py`'s embedding step still
+skips loading the embedding model when a collection is empty
+(`_collection_has_documents` checks the chromaDB collection's document
+count first, via a plain `chromadb.PersistentClient`, before
+`get_vector_store` ever constructs the `HuggingFaceEmbeddings` object) --
+that optimization survived the Groq migration since embeddings still run
+locally, even though the original 30-60+ second generation times it was
+written alongside (inherent to a 7B model on this hardware) no longer
+happen for chat.
 
 ## Known gotcha (db.py / users.py / chat_storage.py)
 
@@ -551,8 +627,6 @@ Practical implications to keep in mind:
   choice) — Logos's freeform "Draft a test" mode can still produce mixed
   question types (short answer, open-ended), but those stay
   print-only via `exams.save_test`, not completable in the app.
-- No per-question review for teachers — the published-tests list shows
-  each student's total score, not which specific questions they missed.
 - No way to un-publish a test or let a student retake one — one
   attempt per student per test, enforced at the DB level
   (`test_submissions` UNIQUE constraint), with no override path yet.

@@ -76,6 +76,7 @@ def delete_test(test_id: int, teacher_username: str) -> None:
         if owned is None:
             return
 
+        connection.execute("DELETE FROM submission_answers WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM test_submissions WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM test_questions WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM flashcards WHERE test_id = ?", (test_id,))
@@ -223,6 +224,29 @@ def get_submission(test_id: int, student_username: str) -> Optional[dict]:
         connection.close()
 
 
+def get_submission_review(test_id: int, student_username: str) -> list[dict]:
+    """Return one question's full text/options plus the student's selected
+    option, in test order, for a teacher to see exactly what a student
+    got right or wrong (not just their total score)."""
+    connection = db.get_connection()
+    try:
+        rows = connection.execute(
+            "SELECT test_questions.question_text, test_questions.option_a, "
+            "test_questions.option_b, test_questions.option_c, test_questions.option_d, "
+            "test_questions.correct_option, submission_answers.selected_option "
+            "FROM test_questions "
+            "JOIN submission_answers "
+            "ON submission_answers.question_id = test_questions.id "
+            "AND submission_answers.test_id = test_questions.test_id "
+            "WHERE test_questions.test_id = ? AND submission_answers.student_username = ? "
+            "ORDER BY test_questions.position",
+            (test_id, student_username),
+        )
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
 _OPTION_COLUMNS = {"A": "option_a", "B": "option_b", "C": "option_c", "D": "option_d"}
 
 
@@ -253,6 +277,12 @@ def submit_test(test_id: int, student_username: str, answers: dict) -> dict:
             "VALUES (?, ?, ?, ?, ?)",
             (test_id, student_username, now, score, total),
         )
+        for question in questions:
+            connection.execute(
+                "INSERT INTO submission_answers "
+                "(test_id, student_username, question_id, selected_option) VALUES (?, ?, ?, ?)",
+                (test_id, student_username, question["id"], answers[question["id"]]),
+            )
         for question in wrong_questions:
             correct_answer_text = question[_OPTION_COLUMNS[question["correct_option"]]]
             connection.execute(

@@ -177,6 +177,49 @@ def test_submit_test_creates_no_flashcards_for_a_perfect_score():
     assert exams.list_flashcards_for_student("ana") == []
 
 
+def test_get_submission_review_shows_each_questions_selected_and_correct_option():
+    _link_student_and_teacher()
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+    questions = exams.get_test_questions(test_id)
+    answers = {
+        questions[0]["id"]: questions[0]["correct_option"],
+        questions[1]["id"]: "A" if questions[1]["correct_option"] != "A" else "B",
+    }
+    exams.submit_test(test_id, "ana", answers)
+
+    review = exams.get_submission_review(test_id, "ana")
+
+    assert len(review) == 2
+    assert review[0]["question_text"] == questions[0]["question_text"]
+    assert review[0]["selected_option"] == questions[0]["correct_option"]
+    assert review[1]["selected_option"] == answers[questions[1]["id"]]
+    assert review[1]["correct_option"] == questions[1]["correct_option"]
+
+
+def test_get_submission_review_is_empty_for_a_student_who_never_submitted():
+    _link_student_and_teacher()
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+
+    assert exams.get_submission_review(test_id, "ana") == []
+
+
+def test_delete_test_also_removes_submission_answers():
+    _link_student_and_teacher()
+    test_id = exams.publish_test(
+        "profesor_lopez", "3º ESO", "Matemáticas", "Examen 1", SAMPLE_QUESTIONS
+    )
+    questions = exams.get_test_questions(test_id)
+    exams.submit_test(test_id, "ana", {q["id"]: q["correct_option"] for q in questions})
+
+    exams.delete_test(test_id, "profesor_lopez")
+
+    assert exams.get_submission_review(test_id, "ana") == []
+
+
 def test_delete_flashcard_only_removes_the_owning_students_card():
     _link_student_and_teacher()
     users.create_student("luis", "secret123", "3º ESO")

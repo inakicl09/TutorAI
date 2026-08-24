@@ -1321,10 +1321,39 @@ else:
                         st.caption(f"{len(test_questions)} {text['question_label'].lower()}s")
                         st.write(f"{text['submissions_label']}: {len(submissions)}")
                         for submission in submissions:
-                            st.write(
-                                f"- {submission['student_username']}: "
+                            with st.expander(
+                                f"{submission['student_username']}: "
                                 f"{submission['score']}/{submission['total']}"
-                            )
+                            ):
+                                review = exams.get_submission_review(
+                                    published_test["id"], submission["student_username"]
+                                )
+                                if not review:
+                                    st.caption(text["review_no_answers_message"])
+                                for index, item in enumerate(review, start=1):
+                                    options = {
+                                        "A": item["option_a"],
+                                        "B": item["option_b"],
+                                        "C": item["option_c"],
+                                        "D": item["option_d"],
+                                    }
+                                    is_correct = item["selected_option"] == item["correct_option"]
+                                    marker = "✅" if is_correct else "❌"
+                                    st.write(
+                                        f"{marker} {text['question_label']} {index}: "
+                                        f"{item['question_text']}"
+                                    )
+                                    selected = item["selected_option"]
+                                    st.caption(
+                                        f"{text['student_answer_label']}: "
+                                        f"{selected}) {options[selected]}"
+                                    )
+                                    if not is_correct:
+                                        correct = item["correct_option"]
+                                        st.caption(
+                                            f"{text['correct_answer_label']}: "
+                                            f"{correct}) {options[correct]}"
+                                        )
                         if st.button(
                             text["delete_test_button"], key=f"delete_published_{published_test['id']}"
                         ):
