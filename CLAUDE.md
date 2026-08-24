@@ -117,8 +117,11 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `chat_storage.py` — `create_chat(..., mode=None)` inserts a chat + its
   system message (`mode` is "draft"/"analyze" for Logos chats, NULL
   otherwise), `add_message(chat_id, role, content)` appends one message,
-  `load_chats(username)` rebuilds full history per chat (`mode` included).
-  All SQLite, all on `db.py`. Reused as-is for both Socrates (student)
+  `load_chats(username)` rebuilds full history per chat (`mode` included),
+  `delete_chat(chat_id, username)` erases one chat and its messages
+  (returns False, changing nothing, if the chat isn't that username's --
+  the only ownership check, since no screen ever shows another user's
+  chat id in a delete button). All SQLite, all on `db.py`. Reused as-is for both Socrates (student)
   and Logos (teacher) conversations -- the schema doesn't care which
   role owns a chat, so no changes were needed to support Logos.
 - `exams.py` — `save_test`/`list_tests_for_teacher`/`delete_test` on the
@@ -161,7 +164,9 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     linked-classes/chats-started stats), *Chat* (create/switch chats for
     grade+subject combos they're linked to, model picker, the
     conversation itself — each message saved immediately via
-    `chat_storage`), *Link teacher* (search by username or join code),
+    `chat_storage`, plus a delete-with-confirm button for the open chat,
+    the shared `render_delete_chat_controls` helper in `app.py`),
+    *Link teacher* (search by username or join code),
     *Material* (PDF upload for RAG), *Exámenes* (every published test
     for a class they're linked to: "Start test" renders the multiple-
     choice questions with radio buttons, "Submit" grades immediately via
@@ -309,6 +314,13 @@ confirming `./run.sh` still starts cleanly.
 
 - One prompt per subject + a shared grade modifier, not ~70 fully
   separate prompts (user's choice, for maintainability).
+- Chat deletion follows the project's existing confirm-then-delete
+  pattern (same two-step shape as the admin's delete-user button), and
+  the chat-picker radios are now numbered ("1. Matemáticas (3º ESO)").
+  Two chats on the same subject used to produce two identical labels, and
+  `chat_labels.index(...)` always resolved that to the first one — merely
+  confusing while the only action was switching chats, but it would have
+  meant deleting the wrong chat.
 - Storage moved from a `data/users.json` + per-user chat JSON files to a
   single SQLite database (`data/tutorai.db`), specifically so chats,
   users, and the future tests feature all live in one place (user's
@@ -527,9 +539,11 @@ Practical implications to keep in mind:
 ## Not yet built
 
 - Per-chat model selection (currently one global model for all chats).
-- Deleting/renaming chats (test chats included). (Unlinking a student
-  from a teacher is now built — admin's Students menu has a remove
-  button per link.)
+- Renaming chats. (Deleting a chat is now built — see
+  `chat_storage.delete_chat` and the "Eliminar chat" button on the
+  student's *Chat* screen, the teacher's *Logos* screen, and the admin's
+  *Artemis* screen. Unlinking a student from a teacher is built too —
+  admin's Students menu has a remove button per link.)
 - RAG for Artemis (admin) — explicitly deferred by the user; Logos
   (teacher) got it once the user asked for exam-material upload, but
   Artemis still has none.

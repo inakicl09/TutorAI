@@ -371,6 +371,50 @@ else:
                 st.rerun()
 
 
+    def render_delete_chat_controls(
+        chat_id: int,
+        chats_key: str,
+        active_chat_key: str,
+        text: dict,
+        picker_key: Optional[str] = None,
+    ) -> None:
+        """Delete-with-confirm button for one chat, used by both the student's
+        Socrates chats and the teacher's Logos chats. `chats_key` and
+        `active_chat_key` are the session_state names holding that screen's
+        chat list and its currently selected chat id; `picker_key` is the
+        chat-picker radio's own key, forgotten on delete so it doesn't keep
+        pointing at a chat that no longer exists."""
+        pending_key = f"confirm_delete_chat_{chat_id}"
+        if st.session_state.get(pending_key):
+            st.warning(text["confirm_delete_chat_message"])
+            confirm_col, cancel_col = st.columns(2)
+            with confirm_col:
+                if st.button(
+                    text["confirm_delete_chat_button"], key=f"confirm_chat_{chat_id}"
+                ):
+                    chat_storage.delete_chat(chat_id, st.session_state.username)
+                    st.session_state[chats_key] = [
+                        c for c in st.session_state[chats_key] if c["id"] != chat_id
+                    ]
+                    remaining_chats = st.session_state[chats_key]
+                    st.session_state[active_chat_key] = (
+                        remaining_chats[0]["id"] if remaining_chats else None
+                    )
+                    st.session_state[pending_key] = False
+                    if picker_key:
+                        st.session_state.pop(picker_key, None)
+                    st.success(text["chat_deleted_message"])
+                    st.rerun()
+            with cancel_col:
+                if st.button(text["cancel_button"], key=f"cancel_chat_{chat_id}"):
+                    st.session_state[pending_key] = False
+                    st.rerun()
+        else:
+            if st.button(text["delete_chat_button"], key=f"delete_chat_{chat_id}"):
+                st.session_state[pending_key] = True
+                st.rerun()
+
+
     MAX_ACTIVITY_SUMMARY_LENGTH = 6000
 
 
@@ -737,6 +781,29 @@ else:
                     params_text = ", ".join(ability["params"])
                     st.markdown(f"- **{ability['name']}** ({params_text}): {ability['description']}")
 
+            # Artemis has exactly one persistent chat, so deleting it just
+            # clears the conversation -- an empty one is created on the next
+            # run by the block above.
+            artemis_chat_id = st.session_state.artemis_chat["id"]
+            if st.session_state.get(f"confirm_delete_chat_{artemis_chat_id}"):
+                st.warning(text["confirm_delete_chat_message"])
+                artemis_confirm_col, artemis_cancel_col = st.columns(2)
+                with artemis_confirm_col:
+                    if st.button(text["confirm_delete_chat_button"], key="confirm_artemis_chat"):
+                        chat_storage.delete_chat(artemis_chat_id, st.session_state.username)
+                        st.session_state[f"confirm_delete_chat_{artemis_chat_id}"] = False
+                        st.session_state.artemis_chat_loaded = False
+                        st.success(text["chat_deleted_message"])
+                        st.rerun()
+                with artemis_cancel_col:
+                    if st.button(text["cancel_button"], key="cancel_artemis_chat"):
+                        st.session_state[f"confirm_delete_chat_{artemis_chat_id}"] = False
+                        st.rerun()
+            else:
+                if st.button(text["delete_chat_button"], key="delete_artemis_chat"):
+                    st.session_state[f"confirm_delete_chat_{artemis_chat_id}"] = True
+                    st.rerun()
+
             artemis_available_models = chat.get_available_models()
 
             if artemis_available_models:
@@ -1049,8 +1116,11 @@ else:
                 if not st.session_state.test_chats:
                     st.caption(text["no_chats_message"])
                 else:
+                    # Numbered so a "draft" and an "analyze" chat for the same
+                    # class don't share a label (see the student picker).
                     logos_chat_labels = [
-                        f"{c['subject']} ({c['grade']})" for c in st.session_state.test_chats
+                        f"{position}. {c['subject']} ({c['grade']})"
+                        for position, c in enumerate(st.session_state.test_chats, start=1)
                     ]
                     logos_chat_ids = [c["id"] for c in st.session_state.test_chats]
                     logos_current_index = (
@@ -1082,6 +1152,13 @@ else:
                     st.info(text["no_chats_message"])
                 else:
                     st.write(f"**{active_test_chat['subject']} ({active_test_chat['grade']})**")
+                    render_delete_chat_controls(
+                        active_test_chat["id"],
+                        "test_chats",
+                        "active_test_chat_id",
+                        text,
+                        picker_key="logos_chat_picker",
+                    )
 
                     for message in active_test_chat["history"]:
                         if message["role"] == "system":
@@ -1559,7 +1636,12 @@ else:
             if not st.session_state.chats:
                 st.caption(text["no_chats_message"])
             else:
-                chat_labels = [f"{c['subject']} ({c['grade']})" for c in st.session_state.chats]
+                # Numbered so two chats on the same subject don't share a
+                # label -- picking (and deleting) one has to be unambiguous.
+                chat_labels = [
+                    f"{position}. {c['subject']} ({c['grade']})"
+                    for position, c in enumerate(st.session_state.chats, start=1)
+                ]
                 chat_ids = [c["id"] for c in st.session_state.chats]
                 current_index = (
                     chat_ids.index(st.session_state.active_chat_id)
@@ -1615,6 +1697,9 @@ else:
                 st.info(text["no_chats_message"])
             else:
                 st.subheader(f"{active_chat['subject']} ({active_chat['grade']})")
+                render_delete_chat_controls(
+                    active_chat["id"], "chats", "active_chat_id", text
+                )
 
                 # Study goal
                 current_goal = goals.get_goal(

@@ -1,4 +1,4 @@
-from tutorai import chat_storage, users
+from tutorai import chat_storage, db, users
 
 
 def test_create_chat_includes_system_message():
@@ -35,6 +35,42 @@ def test_load_chats_returns_each_students_own_chats_only():
 
     ana_chats = chat_storage.load_chats("ana")
     assert len(ana_chats) == 1
+
+
+def test_delete_chat_removes_chat_and_its_messages():
+    users.create_student("ana", "secret123", "1º ESO")
+    kept_chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "system prompt text")
+    doomed_chat = chat_storage.create_chat("ana", "1º ESO", "Biología y Geología", "another prompt")
+    chat_storage.add_message(doomed_chat["id"], "user", "Hello?")
+
+    assert chat_storage.delete_chat(doomed_chat["id"], "ana") is True
+
+    remaining_chats = chat_storage.load_chats("ana")
+    assert [c["id"] for c in remaining_chats] == [kept_chat["id"]]
+
+    connection = db.get_connection()
+    try:
+        leftover_messages = connection.execute(
+            "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ?", (doomed_chat["id"],)
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    assert leftover_messages == 0
+
+
+def test_delete_chat_refuses_someone_elses_chat():
+    users.create_student("ana", "secret123", "1º ESO")
+    users.create_student("luis", "secret123", "1º ESO")
+    ana_chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "system prompt text")
+
+    assert chat_storage.delete_chat(ana_chat["id"], "luis") is False
+    assert len(chat_storage.load_chats("ana")) == 1
+
+
+def test_delete_chat_returns_false_for_unknown_chat():
+    users.create_student("ana", "secret123", "1º ESO")
+
+    assert chat_storage.delete_chat(999, "ana") is False
 
 
 def test_create_chat_defaults_mode_to_none():

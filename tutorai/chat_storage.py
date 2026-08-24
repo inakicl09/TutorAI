@@ -67,6 +67,26 @@ def add_message(chat_id: int, role: str, content: str, created_at: Optional[str]
         connection.close()
 
 
+def delete_chat(chat_id: int, username: str) -> bool:
+    """Delete one chat and all of its messages. `username` is who is asking:
+    a chat that doesn't belong to them isn't deleted, and False is returned.
+    """
+    connection = db.get_connection()
+    try:
+        owner_row = connection.execute(
+            "SELECT username FROM chats WHERE id = ?", (chat_id,)
+        ).fetchone()
+        if owner_row is None or owner_row["username"] != username:
+            return False
+
+        connection.execute("DELETE FROM chat_messages WHERE chat_id = ?", (chat_id,))
+        connection.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+        connection.commit()
+        return True
+    finally:
+        connection.close()
+
+
 def load_chats(username: str) -> list[dict]:
     """Return all of a student's chats, oldest first, each with its full
     message history."""

@@ -18,7 +18,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Default chat model. All models below are available via Groq for free.
-CHAT_MODEL_NAME = "llama-3.3-70b-versatile"
+CHAT_MODEL_NAME = "openai/gpt-oss-120b"
 
 # Embedding model used by sentence-transformers for RAG (runs locally, no API key needed).
 # Downloaded automatically the first time it's used (~22 MB).
