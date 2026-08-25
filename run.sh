@@ -16,6 +16,15 @@ for candidate in python3.12 python3.11 python3.10 python3.9 python3.13 python3.1
     fi
 done
 
+# Some systems (e.g. Apple's Command Line Tools python3) only expose a
+# bare "python3", no versioned name -- fall back to it, but check its
+# actual version since on older Macs "python3" alone can still be 3.7.
+if [ -z "$PYTHON" ] && command -v python3 &>/dev/null; then
+    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then
+        PYTHON="python3"
+    fi
+fi
+
 if [ -z "$PYTHON" ]; then
     echo "Error: Python 3.9 or newer is required."
     echo "Download it from https://www.python.org/downloads/ and try again."
