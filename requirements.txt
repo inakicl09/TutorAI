@@ -1,3 +1,7 @@
+# CPU-only PyTorch (pulled in by sentence-transformers). Without this, Linux
+# servers like Streamlit Community Cloud download ~2.5 GB of NVIDIA GPU
+# libraries this app never uses, which breaks the hosted build.
+--extra-index-url https://download.pytorch.org/whl/cpu
 streamlit
 python-dotenv
 langchain

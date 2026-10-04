@@ -197,6 +197,12 @@ TEXT = {
         "upload_spinner": "Procesando PDF...",
         "upload_success": "Se añadieron {num_chunks} fragmentos a la base de conocimiento.",
         "chat_placeholder": "Escribe tu pregunta...",
+        "hint_button": "💡 Estoy atascado, dame una pista",
+        "hint_request_message": (
+            "Estoy atascado y no sé cómo seguir. Dime el dato concreto que me falta "
+            "(la definición, la fórmula, la regla o el hecho), explícamelo brevemente "
+            "y luego pregúntame cómo aplicarlo, pero no me des la respuesta final."
+        ),
         "thinking_spinner": "Pensando...",
         "ollama_unreachable": (
             "No se pudo conectar con Groq. Comprueba tu conexión a internet "
@@ -505,6 +511,12 @@ TEXT = {
         "upload_spinner": "Processing PDF...",
         "upload_success": "Added {num_chunks} chunks to the knowledge base.",
         "chat_placeholder": "Type your question...",
+        "hint_button": "💡 I'm stuck, give me a hint",
+        "hint_request_message": (
+            "I'm stuck and I don't know how to carry on. Tell me the specific piece "
+            "I'm missing (the definition, the formula, the rule or the fact), explain "
+            "it briefly, then ask me how to apply it -- but don't give me the final answer."
+        ),
         "thinking_spinner": "Thinking...",
         "ollama_unreachable": "Could not connect to Groq. Check your internet connection and reload this page.",
         "ollama_not_installed": (

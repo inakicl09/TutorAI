@@ -37,6 +37,35 @@ def test_load_chats_returns_each_students_own_chats_only():
     assert len(ana_chats) == 1
 
 
+def test_update_system_prompt_replaces_it_without_touching_other_messages():
+    users.create_student("ana", "secret123", "1º ESO")
+    chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "old rules")
+    chat_storage.add_message(chat["id"], "user", "How do I solve this?")
+    chat_storage.add_message(chat["id"], "assistant", "What have you tried?")
+
+    chat_storage.update_system_prompt(chat["id"], "new rules with hints")
+
+    [loaded_chat] = chat_storage.load_chats("ana")
+    assert loaded_chat["history"][0]["role"] == "system"
+    assert loaded_chat["history"][0]["content"] == "new rules with hints"
+    assert [m["content"] for m in loaded_chat["history"][1:]] == [
+        "How do I solve this?",
+        "What have you tried?",
+    ]
+
+
+def test_update_system_prompt_only_touches_the_given_chat():
+    users.create_student("ana", "secret123", "1º ESO")
+    first_chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "first rules")
+    second_chat = chat_storage.create_chat("ana", "1º ESO", "Biología y Geología", "second rules")
+
+    chat_storage.update_system_prompt(first_chat["id"], "updated rules")
+
+    chats_by_id = {c["id"]: c for c in chat_storage.load_chats("ana")}
+    assert chats_by_id[first_chat["id"]]["history"][0]["content"] == "updated rules"
+    assert chats_by_id[second_chat["id"]]["history"][0]["content"] == "second rules"
+
+
 def test_delete_chat_removes_chat_and_its_messages():
     users.create_student("ana", "secret123", "1º ESO")
     kept_chat = chat_storage.create_chat("ana", "1º ESO", "Matemáticas", "system prompt text")

@@ -10,6 +10,19 @@ def test_build_system_prompt_combines_all_pieces():
     assert prompts.COMMON_RULES in prompt
 
 
+def test_socratic_prompt_allows_a_concrete_hint_when_the_student_is_stuck():
+    prompt = prompts.build_system_prompt("1º ESO", "Matemáticas", "es")
+
+    # The tutor must still never hand over the answer...
+    assert "Never state the final answer" in prompt
+    # ...but a stuck student should get the missing piece of information,
+    # not another question they already can't answer.
+    assert "still stuck" in prompt
+    assert "definition" in prompt
+    assert "formula" in prompt
+    assert "Never refuse to help" in prompt
+
+
 def test_build_context_prompt_empty_when_no_chunks():
     assert prompts.build_context_prompt([]) == ""
 

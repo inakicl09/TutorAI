@@ -12,7 +12,10 @@ for this purely for testing different roles quickly, and said to remove
 it once the project is finished. **Remove that block (and the
 `dev_login_*` translation keys) before any real deployment** — anyone
 who opens the app can otherwise log in as anyone, including Admin,
-without a password.
+without a password. The public demo on Streamlit Cloud deliberately
+*keeps* it (user's choice, see "Hosting"). That's acceptable only because
+the hosted database holds nothing but resettable demo accounts. If real
+users ever go on the hosted copy, this block must go first.
 
 ## What this is
 
@@ -42,6 +45,11 @@ with `model_not_found` rather than an obvious "outdated model list"
 error). If chat calls start 404ing, check `_get_client().models.list()`
 against the current `supported`/`CHAT_MODEL_NAME` before assuming
 anything else is wrong.
+
+It's shared as a **hosted web app on Streamlit Community Cloud** (see
+"Hosting" below), so a recipient just opens a link -- no install, no
+`run.sh`, no Groq key of their own. `run.sh` remains the way to run it
+locally.
 
 Two interfaces share the same logic:
 - `tutorai/app.py` — Streamlit web UI (the main one, has the full
@@ -122,6 +130,10 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   a grade difficulty calibration (`GRADE_INSTRUCTIONS`, one per grade), and
   a response-language instruction (`LANGUAGE_INSTRUCTIONS`). This avoids
   hand-writing ~70 near-duplicate prompts for every grade+subject pair.
+  `COMMON_RULES` holds the Socratic behavior itself, including the
+  progressive-hint ladder (see the decision note below): question first,
+  then the missing fact/formula/rule, then one worked step -- never the
+  final answer.
 - `translations.py` — UI strings in Spanish/English for both `app.py` and
   `tutor.py`. Subject and grade names are NOT translated (they're official
   curriculum names, shown as-is regardless of UI language).
@@ -143,6 +155,12 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   extra fields chat_storage rows carry, e.g. `created_at`); `ask_tutor`,
   `ask_assistant`, `ask_logos_with_material`, `summarize_chat`, and
   `generate_structured_test` all funnel through it.
+  Every reply also passes through `_use_dollar_math`, which rewrites the
+  `\[ ... \]` / `\( ... \)` LaTeX delimiters the models like to emit into
+  the `$$ ... $$` / `$ ... $` form Streamlit's markdown actually renders
+  (`st.markdown` supports only dollar signs) -- asking for dollars in the
+  prompt helps but isn't reliable, and a hint whose formula renders as
+  raw backslashes is worse than no hint.
   `is_api_key_configured()` (renamed from the Ollama-era
   `is_ollama_installed()`) just checks whether `config.GROQ_API_KEY` is
   set. `get_available_models()` calls Groq's `models.list()` and
@@ -156,6 +174,11 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   system message (`mode` is "draft"/"analyze" for Logos chats, NULL
   otherwise), `add_message(chat_id, role, content)` appends one message,
   `load_chats(username)` rebuilds full history per chat (`mode` included),
+  `update_system_prompt(chat_id, system_prompt)` rewrites the stored
+  position-0 system message (called from the student *Chat* screen on
+  every open, so edits to `prompts.py` reach chats that already exist --
+  otherwise a chat would keep forever the rules from the day it was
+  created),
   `delete_chat(chat_id, username)` erases one chat and its messages
   (returns False, changing nothing, if the chat isn't that username's --
   the only ownership check, since no screen ever shows another user's
@@ -210,7 +233,9 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     grade+subject combos they're linked to, model picker, the
     conversation itself — each message saved immediately via
     `chat_storage`, plus a delete-with-confirm button for the open chat,
-    the shared `render_delete_chat_controls` helper in `app.py`),
+    the shared `render_delete_chat_controls` helper in `app.py`, and a
+    "💡 Estoy atascado, dame una pista" button that makes Socrates hand
+    over the missing fact/formula/rule instead of yet another question),
     *Link teacher* (search by username or join code),
     *Material* (PDF upload for RAG), *Exámenes* (every published test
     for a class they're linked to: "Start test" renders the multiple-
@@ -315,6 +340,84 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   true`. Using `python -m streamlit` (not the bare `streamlit` command)
   is what puts the repo root on `sys.path` so `tutorai/app.py`'s
   `from tutorai import ...` imports resolve.
+- `streamlit_app.py` (repo root) — the hosted entry point. Streamlit Cloud
+  can only start apps with the bare `streamlit run <file>`, which puts
+  just that file's folder on `sys.path`, so pointing it at
+  `tutorai/app.py` would break every package import. This root-level file
+  makes the repo root the script folder and runs the real app with
+  `runpy.run_module("tutorai.app", run_name="__main__")`. It must be
+  `run_module`, not `import tutorai.app`: Streamlit re-executes the main
+  script on every click, and a plain import only runs the module once.
+- `seed_test_data.py` — besides the manual `python -m tutorai.seed_test_data`
+  script, it holds `seed_demo_if_empty()`, which `app.py` calls on startup
+  (inside `@st.cache_resource`, so once per server process). On an empty
+  database it creates `admin_demo` plus the 10 test teachers and 120 test
+  students (all password `"1234"`), and gives every student one chat per
+  linked subject: 2–3 different canned, subject-specific questions with
+  Socratic replies, from `_EXCHANGES_BY_SUBJECT`, with no LLM calls. It
+  seeds `random` with `DEMO_RANDOM_SEED` first, so every boot produces the
+  identical dataset (verified by diffing two fresh seeds). Takes ~10 s on
+  this Mac. With any existing account it does nothing, so local databases
+  are never touched.
+
+## Hosting (Streamlit Community Cloud)
+
+The user wanted to email TutorAI to someone who could open it like an app,
+see the login immediately, never touch code or `run.sh`, and have it
+available at all times. Hosting won over the alternatives:
+- **A packaged desktop app** (PyInstaller) was rejected. The venv is
+  1.1 GB, torch alone 339 MB, needed for local RAG embeddings, so it's far
+  over email attachment limits. Unsigned Mac apps are blocked by
+  Gatekeeper, a Windows build can't be made from this Mac, and
+  Streamlit+PyInstaller is fragile.
+- **Sending the code** was rejected because the recipient would need
+  Python, a terminal, a ~1 GB install, and their own Groq key.
+
+Setup and behavior:
+- **Deploy settings**: repo `inakicl09/TutorAI` (private), branch `main`,
+  main file `streamlit_app.py`, Python 3.11, and the secret
+  `GROQ_API_KEY = "..."` in the app's Secrets box. Root-level Streamlit
+  secrets are also exposed as environment variables, so `config.py`'s
+  `os.environ.get("GROQ_API_KEY")` works there unchanged. The key never
+  goes in the repo or the email. Every push to `main` redeploys.
+- **User's explicit choices** (asked 2026-10-04):
+  - The link is public.
+  - The TEMPORARY dev "log in as any user" dropdown stays on the hosted
+    copy too.
+  - Data resetting on restart is acceptable.
+
+  Consequence they accepted: anyone with the link can enter as
+  `admin_demo` without a password and spend the Groq free-tier quota. The
+  hosted database only ever holds `seed_demo_if_empty`'s demo accounts,
+  never real data.
+- **The database is not persistent.** Cloud's filesystem is wiped on every
+  restart, and apps sleep after ~12 h without visitors. The next visitor
+  clicks "wake up", waits about a minute (build cache plus ~10–40 s of
+  seeding), and gets the identical fresh demo data again. Anything a
+  visitor creates (accounts, chats, tests) is lost at the next restart.
+  Making it persistent would mean moving off the local SQLite file to an
+  external database, a large change touching every module that uses
+  `db.py`.
+- **`requirements.txt` starts with
+  `--extra-index-url https://download.pytorch.org/whl/cpu`.** Without it,
+  Linux resolves `sentence-transformers` → torch with 15 `nvidia-*` CUDA
+  packages plus `triton` (~2.5 GB), which breaks Cloud's build. With it,
+  torch resolves to `+cpu` and no NVIDIA packages. Checked with
+  `uv pip compile --python-platform x86_64-manylinux_2_28 --python-version
+  3.11`. The Mac resolution (torch 2.8.0 on Python 3.9) is unaffected.
+- **Memory**: Cloud's RAM is limited. The embedding model only loads on a
+  PDF upload or a search over uploaded PDFs (see `rag.py`'s
+  empty-collection shortcut), so that is the feature most likely to hit
+  the limit.
+- **How the deploy path was verified locally**: the real server was
+  started from a clean copy exactly as Cloud runs it (bare
+  `streamlit run streamlit_app.py`, no `PYTHONPATH`, no `.env`, empty
+  `data/`). A real session was then driven over Streamlit's websocket
+  (`/_stcore/stream`, `BackMsg.rerun_script`, reading `ForwardMsg`
+  deltas). It showed the seeding spinner, then the login form and dev
+  dropdown, and the database ended up with 131 accounts and 611 chats.
+  Headless Chrome screenshots were useless for this, because they capture
+  before Streamlit's websocket paints anything and leave the page blank.
 
 ## Testing
 
@@ -351,8 +454,10 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   No local model server (Ollama or otherwise) is required anymore — the
   first PDF upload/search downloads the small (~22 MB) local embedding
   model automatically.
-- No admin account exists yet — run `python3 -m tutorai.create_admin`
-  once to create one.
+- The local `data/tutorai.db` already has an admin plus the seeded test
+  accounts. On a brand-new machine, `python3 -m tutorai.create_admin`
+  creates an admin. Alternatively, starting the app on an empty database
+  creates `admin_demo` / `1234` automatically via `seed_demo_if_empty`.
 
 ## Known gotcha (fixed)
 
@@ -541,6 +646,56 @@ confirming `./run.sh` still starts cleanly.
   `create_student`, `add_teaching_assignment`, and
   `link_student_to_teacher` -- an invalid grade or subject now fails
   with a clear message instead of corrupting a user record.
+- The Socratic tutor now gives real content, not only questions, once a
+  student is stuck (user's ask: "it can actually give a bit of data to
+  help the user if they are stuck"). Done entirely in
+  `prompts.COMMON_RULES` as a three-rung ladder -- simpler question
+  first, then the one missing fact/formula/definition/rule (plus a
+  worked example that must use DIFFERENT numbers than the student's own
+  exercise), then one concrete step -- with "never state the final
+  answer" left intact, so the student still finishes the exercise
+  themselves. Two things had to be added after live testing against
+  Groq:
+  - A precedence line at the top of `COMMON_RULES` saying the subject
+    focus is only the *default* stance. Several `SUBJECT_FOCUS` entries
+    say things like "rather than reciting facts for them" or "rather
+    than summarizing the philosophers' positions," which actively fought
+    the new hint rules -- humanities chats kept answering "no tengo ni
+    idea" with yet another broad question while maths/physics chats
+    hinted correctly straight away.
+  - An explicit rule for open questions (explain the causes of X,
+    analyse a poem): there the student's own developed reasoning *is*
+    the answer, so the model was treating every relevant fact as
+    forbidden. It's now told to name ONE element (one cause and its
+    date, one device the text uses) and have the student develop it,
+    never the full list.
+  Prompt wording alone turned out not to be enough: measured live
+  against Groq over 8 humanities conversations, only 4/8 stuck-student
+  replies actually contained content (maths and physics were reliable
+  from the start; Historia/Filosofía/Biología kept answering "no tengo
+  ni idea" with one more broad question). So the *Chat* screen also got
+  a "💡 Estoy atascado, dame una pista" button, shown once a chat has
+  at least one student message. It sends the fixed
+  `hint_request_message` string as a normal student turn, reusing the
+  `prefill_exercise_text` session-state path the Exercises screen
+  already used, so there is no second send path to keep in sync. Asking
+  explicitly is what makes it deterministic -- 5/5 on the same subjects
+  that failed before.
+- The hint button calls `chat.ask_tutor(..., use_rag=False)`, and that
+  flag exists because of a bug the button exposed: the hint message is
+  the same topic-free sentence every time, and
+  `rag.retrieve_relevant_chunks` has no relevance threshold -- Chroma's
+  `similarity_search` always returns its top `NUM_CHUNKS_TO_RETRIEVE`
+  chunks no matter how badly they match. With only a maths PDF uploaded,
+  clicking "dame una pista" in a philosophy chat came back explaining
+  rational numbers, and in a history chat explaining complex-number
+  modulus. Skipping retrieval for that one message fixes it and loses
+  nothing, since the conversation history already says what the student
+  is working on. NOTE: the same missing threshold still affects ordinary
+  chat messages -- there it is mostly harmless, because a message that
+  names its own topic keeps the model anchored even with irrelevant
+  chunks attached, but a relevance cutoff in `rag.py` would be the real
+  fix (see "Not yet built").
 - Per-question test review for teachers was added as a new
   `submission_answers` table (one row per question per submission)
   rather than reconstructing it after the fact, since `test_submissions`
@@ -615,6 +770,14 @@ Practical implications to keep in mind:
 ## Not yet built
 
 - Per-chat model selection (currently one global model for all chats).
+- No relevance threshold on RAG retrieval — `rag.retrieve_relevant_chunks`
+  returns Chroma's top `config.NUM_CHUNKS_TO_RETRIEVE` chunks even when
+  every one of them is about a different subject, so a student with one
+  maths PDF uploaded gets maths chunks attached to their history chat.
+  Worked around for the hint button (`ask_tutor(use_rag=False)`, see the
+  decision note above) but not fixed properly: that would mean using
+  `similarity_search_with_relevance_scores` and dropping chunks below a
+  tuned cutoff.
 - Renaming chats. (Deleting a chat is now built — see
   `chat_storage.delete_chat` and the "Eliminar chat" button on the
   student's *Chat* screen, the teacher's *Logos* screen, and the admin's

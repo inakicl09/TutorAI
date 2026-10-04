@@ -36,6 +36,7 @@ from tutorai import (
     prompts,
     questions,
     rag,
+    seed_test_data,
     sessions,
     subjects,
     translations,
@@ -47,6 +48,17 @@ classes.sync_with_teaching_assignments()
 homerooms.backfill_homerooms()
 
 st.set_page_config(page_title="TutorAI", page_icon="📚")
+
+
+# The hosted copy starts every boot with an empty database, so fill it with
+# the demo accounts and chats. cache_resource runs this once per server
+# process instead of on every click. A no-op when accounts already exist.
+@st.cache_resource(show_spinner="Preparando datos de demostración (solo la primera vez)...")
+def prepare_demo_data() -> bool:
+    return seed_test_data.seed_demo_if_empty()
+
+
+prepare_demo_data()
 
 if "username" not in st.session_state:
     st.session_state.username = None
@@ -1725,6 +1737,20 @@ else:
             if active_chat is None:
                 st.info(text["no_chats_message"])
             else:
+                # A chat stores the system prompt it was created with, so
+                # refresh it here: otherwise edits to prompts.py (e.g. the
+                # hint rules) would only ever reach brand-new chats.
+                # Student chats only -- do NOT copy this to Logos chats:
+                # an "analyze" chat's prompt has that class's activity
+                # summary baked in at creation time, and rebuilding it
+                # would throw that away.
+                current_system_prompt = prompts.build_system_prompt(
+                    active_chat["grade"], active_chat["subject"], language
+                )
+                if active_chat["history"][0]["content"] != current_system_prompt:
+                    chat_storage.update_system_prompt(active_chat["id"], current_system_prompt)
+                    active_chat["history"][0]["content"] = current_system_prompt
+
                 st.subheader(f"{active_chat['subject']} ({active_chat['grade']})")
                 render_delete_chat_controls(
                     active_chat["id"], "chats", "active_chat_id", text
@@ -1836,6 +1862,17 @@ else:
                                 )
                                 st.success(text["note_saved_message"])
 
+                # "I'm stuck" button. The prompt tells Socrates to give a
+                # real hint once a student says they're lost, but a model
+                # only follows that about half the time in essay subjects
+                # -- this makes asking explicit, and reuses the prefill
+                # path below so the message is sent like any other turn.
+                if user_msgs_in_chat and st.button(
+                    text["hint_button"], key=f"hint_{active_chat['id']}"
+                ):
+                    st.session_state["prefill_exercise_text"] = text["hint_request_message"]
+                    st.rerun()
+
                 # Pre-filled exercise text (from Exercises screen)
                 prefill_text = st.session_state.pop("prefill_exercise_text", None)
 
@@ -1850,10 +1887,18 @@ else:
                     with st.chat_message("user"):
                         st.write(student_message)
 
+                    # The hint request is the same topic-free sentence every
+                    # time, so searching the uploaded PDFs for it drags in
+                    # unrelated material (see chat.ask_tutor's use_rag).
+                    is_hint_request = student_message == text["hint_request_message"]
+
                     try:
                         with st.spinner(text["thinking_spinner"]):
                             tutor_reply = chat.ask_tutor(
-                                active_chat["history"], student_message, selected_model
+                                active_chat["history"],
+                                student_message,
+                                selected_model,
+                                use_rag=not is_hint_request,
                             )
                     except Exception:
                         st.error(text["ollama_disconnected"])

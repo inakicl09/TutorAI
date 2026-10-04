@@ -67,6 +67,23 @@ def add_message(chat_id: int, role: str, content: str, created_at: Optional[str]
         connection.close()
 
 
+def update_system_prompt(chat_id: int, system_prompt: str) -> None:
+    """Replace a chat's stored system message (position 0) with a freshly
+    built one. Called when a chat is opened so that edits to prompts.py
+    apply to chats that already exist, not just newly created ones --
+    otherwise a chat keeps forever the rules that were in place the day
+    it was started."""
+    connection = db.get_connection()
+    try:
+        connection.execute(
+            "UPDATE chat_messages SET content = ? WHERE chat_id = ? AND position = 0",
+            (system_prompt, chat_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def delete_chat(chat_id: int, username: str) -> bool:
     """Delete one chat and all of its messages. `username` is who is asking:
     a chat that doesn't belong to them isn't deleted, and False is returned.

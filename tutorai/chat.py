@@ -56,6 +56,19 @@ def get_available_models() -> list[str]:
         return [supported[0]]
 
 
+def _use_dollar_math(reply: str) -> str:
+    r"""Rewrite the \[ ... \] and \( ... \) LaTeX delimiters models often
+    use into the $$ ... $$ / $ ... $ form Streamlit can actually render.
+
+    Asking for dollar signs in the prompt mostly works but not always,
+    and a hint whose formula shows up as raw backslashes is worse than
+    no hint at all -- so the delimiters are fixed here too.
+    """
+    reply = reply.replace("\\[", "$$").replace("\\]", "$$")
+    reply = reply.replace("\\(", "$").replace("\\)", "$")
+    return reply
+
+
 def _call_groq_chat(messages: list[dict], model_name: str) -> str:
     """Send a list of messages to Groq and return the reply text.
 
@@ -68,21 +81,32 @@ def _call_groq_chat(messages: list[dict], model_name: str) -> str:
         model=model_name,
         messages=clean,
     )
-    return response.choices[0].message.content
+    return _use_dollar_math(response.choices[0].message.content)
 
 
 def ask_tutor(
     conversation_history: list[dict],
     student_message: str,
     model_name: str = config.CHAT_MODEL_NAME,
+    use_rag: bool = True,
 ) -> str:
     """Send the student's message to the tutor model, using relevant course
     material as extra context, and return the tutor's reply.
 
     `conversation_history` is updated in place with the plain student
     message and the tutor's reply, so the saved history stays readable.
+
+    Pass `use_rag=False` for a message that doesn't say what it is about.
+    The "I'm stuck, give me a hint" button sends the same topic-free
+    sentence every time, and `rag.retrieve_relevant_chunks` always hands
+    back its top few chunks even when nothing stored is remotely related
+    (there is no relevance threshold), so that sentence pulls in whatever
+    PDF happens to be closest and the hint comes back about the wrong
+    subject entirely -- a maths chapter answering a philosophy question.
+    The conversation history already says what the student is working on,
+    so skipping retrieval loses nothing here.
     """
-    relevant_chunks = rag.retrieve_relevant_chunks(student_message)
+    relevant_chunks = rag.retrieve_relevant_chunks(student_message) if use_rag else []
     context_prompt = prompts.build_context_prompt(relevant_chunks)
 
     conversation_history.append({"role": "user", "content": student_message})

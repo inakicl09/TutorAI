@@ -145,3 +145,57 @@ def test_generate_structured_test_searches_teacher_materials(monkeypatch):
         chat.generate_structured_test("1º ESO", "Matemáticas", "es", 3)
 
     assert seen_calls == [("Matemáticas exam questions", rag.TEACHER_MATERIALS_COLLECTION)]
+
+
+def test_ask_tutor_searches_the_students_message_by_default(monkeypatch):
+    from tutorai import rag
+
+    seen_queries = []
+    monkeypatch.setattr(
+        rag, "retrieve_relevant_chunks", lambda question, **kw: seen_queries.append(question) or []
+    )
+
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion("ok")
+        chat.ask_tutor([{"role": "system", "content": "rules"}], "Como derivo x^2?")
+
+    assert seen_queries == ["Como derivo x^2?"]
+
+
+def test_ask_tutor_skips_rag_when_use_rag_is_false(monkeypatch):
+    """The hint button sends the same topic-free sentence every time, and
+    retrieval has no relevance threshold, so searching on it would pull in
+    an unrelated PDF and answer about the wrong subject."""
+    from tutorai import rag
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("ask_tutor(use_rag=False) must not search the documents")
+
+    monkeypatch.setattr(rag, "retrieve_relevant_chunks", fail_if_called)
+
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion("ok")
+        reply = chat.ask_tutor(
+            [{"role": "system", "content": "rules"}],
+            "Estoy atascado, dame una pista",
+            use_rag=False,
+        )
+
+    assert reply == "ok"
+
+
+def test_use_dollar_math_rewrites_latex_delimiters():
+    reply = "La formula es \\[ x = \\frac{-b}{2a} \\] y el valor \\( a=1 \\)."
+
+    fixed = chat._use_dollar_math(reply)
+
+    assert "\\[" not in fixed and "\\]" not in fixed
+    assert "\\(" not in fixed and "\\)" not in fixed
+    assert "$$ x = \\frac{-b}{2a} $$" in fixed
+    assert "$ a=1 $" in fixed
+
+
+def test_use_dollar_math_leaves_plain_text_and_dollars_alone():
+    reply = "Piensa en $x^2 - 5x + 6 = 0$ y dime que pares multiplican 6."
+
+    assert chat._use_dollar_math(reply) == reply
