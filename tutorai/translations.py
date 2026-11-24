@@ -2,6 +2,15 @@
 language. Used by both app.py and tutor.py.
 """
 
+# Shown (in both languages, before any language picker exists) once the
+# public test site has closed on its end date -- see project_end.py.
+PROJECT_CLOSED_MESSAGE = (
+    "**El proyecto de investigación ha terminado.** ¡Gracias por participar! "
+    "Todos los datos de esta prueba se han borrado.\n\n"
+    "**The research project has ended.** Thank you for taking part! "
+    "All data from this test has been deleted."
+)
+
 TEXT = {
     "es": {
         "app_title": "TutorAI: tu tutor socrático",
@@ -88,9 +97,10 @@ retirarlo cuando quieras borrando tu cuenta desde el *Menú principal*.
 **Menores de 14 años:** necesitan el consentimiento de su madre, padre
 o tutor legal (art. 7 de la LOPDGDD).
 
-**¿Cuánto tiempo se guardan?** Solo mientras dure el proyecto. Al
-terminar se borrarán todos los datos. Si borras tu cuenta, desaparece al
-momento y de las copias de seguridad en un máximo de 24 horas.
+**¿Cuánto tiempo se guardan?** Solo mientras dure el proyecto: todos
+los datos se borrarán automáticamente el **{end_date}** como muy tarde.
+Si borras tu cuenta antes, desaparece al momento y de las copias de
+seguridad en un máximo de 24 horas.
 
 **Tus derechos:** puedes pedir acceder a tus datos, corregirlos o
 borrarlos escribiendo a {contact}, o borrarlos tú mismo desde el *Menú
@@ -515,9 +525,10 @@ time by deleting your account from the *Main menu*.
 **Under 14s:** need consent from a parent or legal guardian (Spanish
 LOPDGDD art. 7).
 
-**How long is it kept?** Only while the project lasts; all data is
-deleted when it ends. If you delete your account it's gone immediately,
-and from backups within 24 hours.
+**How long is it kept?** Only while the project lasts: all data is
+deleted automatically on **{end_date}** at the latest. If you delete
+your account before then, it's gone immediately, and from backups within
+24 hours.
 
 **Your rights:** you can ask to access, correct or delete your data by
 writing to {contact}, or delete it yourself from the *Main menu*. If you

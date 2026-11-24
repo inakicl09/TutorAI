@@ -56,10 +56,22 @@ _last_uploaded_signature = None
 _last_snapshot_time = 0.0
 _last_error: Optional[str] = None
 _last_success_time: Optional[float] = None
+# Set by project_end once the test site has closed: from then on nothing
+# is ever restored or uploaded again by this process.
+_permanently_disabled = False
 
 
 def is_configured() -> bool:
     return bool(config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY and config.SUPABASE_BUCKET)
+
+
+def disable_permanently() -> None:
+    """Turn backups off for the rest of this process (used when the test
+    site's end date has passed and all data is being deleted)."""
+    global _uploads_enabled, _permanently_disabled
+    with _lock:
+        _uploads_enabled = False
+        _permanently_disabled = True
 
 
 def uploads_enabled() -> bool:
@@ -145,7 +157,7 @@ def restore_on_startup() -> str:
     "failed" (uploads stay off for this process, see the module docstring).
     """
     global _uploads_enabled, _last_error, _last_uploaded_signature
-    if not is_configured():
+    if not is_configured() or _permanently_disabled:
         return "disabled"
 
     if os.path.exists(config.DB_PATH) and os.path.exists(_marker_path()):
@@ -242,6 +254,8 @@ def flush_now() -> bool:
         return False
 
     with _lock:
+        if not _uploads_enabled or not os.path.exists(config.DB_PATH):
+            return False  # re-checked under the lock: disable_permanently may have run
         signature = _file_signature(config.DB_PATH)
         if signature == _last_uploaded_signature:
             return False

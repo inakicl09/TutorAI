@@ -1,0 +1,39 @@
+# Deletes the public test site's Supabase backups on/after its end date
+# (config.PROJECT_END_DATE, 30 June 2027), even if nobody ever opens the
+# site again. Before that date each daily run just checks and exits.
+# See tutorai/project_end.py. Needs three repository secrets:
+# SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET.
+name: Delete test-site data on the end date
+
+on:
+  schedule:
+    - cron: "17 4 * * *" # every day at 04:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only list what would be deleted (safe to run any time)"
+        type: boolean
+        default: true
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Delete backups (only on/after the end date)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python -m tutorai.project_end --dry-run
+          else
+            python -m tutorai.project_end
+          fi

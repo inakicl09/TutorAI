@@ -49,9 +49,13 @@ TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "")
 # How testers can contact the person running the research project, shown
 # in the privacy notice (e.g. an email). Optional.
 RESEARCH_CONTACT = os.environ.get("RESEARCH_CONTACT", "")
+# On this date (UTC calendar day) every tester's data on the public test
+# site is deleted automatically and the site closes (see project_end.py).
+# The user chose 30 June 2027; the privacy notice quotes it.
+PROJECT_END_DATE = os.environ.get("PROJECT_END_DATE", "2027-06-30")
 # Bump when the privacy notice text changes: it's stored with each
 # tester's consent, to show which version they accepted.
-PRIVACY_NOTICE_VERSION = "2026-11-24"
+PRIVACY_NOTICE_VERSION = "2026-11-24b"  # b: states the automatic deletion date
 # Link to the external feedback questionnaire, shown as a button if set.
 FEEDBACK_FORM_URL = os.environ.get("FEEDBACK_FORM_URL", "")
 # In test mode only the last this-many chat messages (plus the system

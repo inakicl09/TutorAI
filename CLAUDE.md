@@ -356,6 +356,9 @@ import each other with absolute imports, e.g. `from tutorai import db`.
 - `persistence.py` — Supabase Storage backup/restore of the SQLite file
   for the public test site; a no-op unless the Supabase secrets are set.
   See "Public test site".
+- `project_end.py` — deletes every test-site tester's data on
+  `config.PROJECT_END_DATE` and closes the site; also the CLI behind the
+  daily GitHub Actions workflow. See "Public test site".
 - `seed_test_data.py` — besides the manual `python -m tutorai.seed_test_data`
   script, it holds `seed_demo_if_empty()`, which `app.py` calls on startup
   (inside `@st.cache_resource`, so once per server process). On an empty
@@ -562,9 +565,32 @@ of it applies to the full demo.
 - **AI transparency**: a caption above the chat input ("Estás hablando
   con una inteligencia artificial…"), plus lines in the guide and notice.
 - **Usernames**: hints asking for a nickname and a new password.
-- **Still the user's job** (told to them): delete all data (Supabase
-  bucket + the Cloud app) when the project ends; check with their school
-  about minors; optionally set `RESEARCH_CONTACT`.
+- **Automatic end date** (`project_end.py`, user's ask: "I feel like I'll
+  forget it"). On `config.PROJECT_END_DATE` (default `2027-06-30`, a UTC
+  calendar day, quoted in the privacy notice) all test-site data is
+  deleted, by two independent paths:
+  - The app: at the top of every page load in test mode,
+    `project_end.wipe_everything()` runs before anything restores or opens
+    the DB. It calls `persistence.disable_permanently()`, deletes the
+    local DB, marker, key file, chroma and documents, and deletes every
+    Supabase object. It then shows only `translations.PROJECT_CLOSED_MESSAGE`
+    (no login at all) and `st.stop()`s. `st.set_page_config` moved to the
+    top of `app.py` for this.
+  - GitHub Actions: `.github/workflows/delete-test-data.yml` runs daily
+    with `python -m tutorai.project_end`. It's a no-op before the date,
+    and deletes every bucket object on or after it, even if the sleeping
+    app is never opened. It needs repo secrets `SUPABASE_URL`,
+    `SUPABASE_SERVICE_KEY` and `SUPABASE_BUCKET`, which the user adds by
+    hand (no `gh` CLI on this Mac). Manual "Run workflow" defaults to
+    `--dry-run`, which only lists.
+  - The repo is private, so GitHub's 60-day auto-disable of scheduled
+    workflows (public repos only) doesn't apply. It uses a few free
+    Actions minutes a month.
+  - The full demo is never affected.
+- **Still the user's job** (told to them): check with their school about
+  minors; optionally set `RESEARCH_CONTACT`; export anything needed for
+  the write-up before 30 June 2027; optionally delete the Supabase
+  project and the Cloud app afterwards.
 
 ## Testing
 

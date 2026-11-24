@@ -19,4 +19,5 @@ def temp_database(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SUPABASE_SERVICE_KEY", "")
     monkeypatch.setattr(config, "SUPABASE_BUCKET", "")
     monkeypatch.setattr(config, "PUBLIC_TEST_MODE", False)
+    monkeypatch.setattr(config, "PROJECT_END_DATE", "2027-06-30")
     db.init_db()

@@ -53,6 +53,13 @@ the full demo above only because its Secrets contain
   research-only use, and 14+ or a parent's consent. Testers can delete
   their own account and data from the main menu. Passwords are never
   viewable, not even by the admin.
+- **On 30 June 2027 every tester's data is deleted automatically** and
+  the site only shows "el proyecto ha terminado". A daily GitHub Action
+  also deletes the Supabase backups that day. It needs three repository
+  secrets (GitHub → repo **Settings → Secrets and variables → Actions →
+  New repository secret**): `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+  `SUPABASE_BUCKET`, with the same values as in Streamlit. Download
+  anything you need for your write-up before that date.
 - Optional secret `RESEARCH_CONTACT = "tu-email@ejemplo.com"`: the
   contact shown in the privacy notice. Without it, the notice points to
   the feedback form.

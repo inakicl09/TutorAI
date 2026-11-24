@@ -34,6 +34,7 @@ from tutorai import (
     homerooms,
     notes,
     persistence,
+    project_end,
     prompts,
     questions,
     rag,
@@ -43,6 +44,18 @@ from tutorai import (
     translations,
     users,
 )
+
+st.set_page_config(page_title="TutorAI", page_icon="📚")
+
+# The public test site closes itself on config.PROJECT_END_DATE: every
+# tester's data is deleted (locally and in the Supabase backups) and only
+# this notice is shown. Checked before anything restores or opens the
+# database, on every page load, so a failed backup deletion is retried.
+if config.PUBLIC_TEST_MODE and project_end.is_project_over():
+    project_end.wipe_everything()
+    st.title("TutorAI")
+    st.info(translations.PROJECT_CLOSED_MESSAGE)
+    st.stop()
 
 # On the public test site the database file is backed up to Supabase
 # Storage (see persistence.py). It must be restored BEFORE anything opens
@@ -60,8 +73,6 @@ start_database_backup()
 db.init_db()
 classes.sync_with_teaching_assignments()
 homerooms.backfill_homerooms()
-
-st.set_page_config(page_title="TutorAI", page_icon="📚")
 
 
 # The full demo starts every boot with an empty database, so fill it with
@@ -204,7 +215,8 @@ def render_public_test_signup(username_input: str, password_input: str) -> None:
     with st.expander(text["privacy_notice_header"]):
         st.markdown(
             text["privacy_notice_body"].format(
-                contact=config.RESEARCH_CONTACT or text["privacy_contact_fallback"]
+                contact=config.RESEARCH_CONTACT or text["privacy_contact_fallback"],
+                end_date=project_end.end_date().strftime("%d/%m/%Y"),
             )
         )
     consent_research = st.checkbox(text["consent_research_checkbox"])
