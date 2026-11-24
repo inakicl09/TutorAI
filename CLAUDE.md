@@ -390,7 +390,9 @@ Setup and behavior:
   `GROQ_API_KEY = "..."` in the app's Secrets box. Root-level Streamlit
   secrets are also exposed as environment variables, so `config.py`'s
   `os.environ.get("GROQ_API_KEY")` works there unchanged. The key never
-  goes in the repo or the email. Every push to `main` redeploys.
+  goes in the repo or the email. Every push to `main` redeploys. These are
+  the full demo's settings; the second app (public test site) is
+  described in its own section below.
 - **User's explicit choices** (asked 2026-10-04):
   - The link is public.
   - The TEMPORARY dev "log in as any user" dropdown stays on the hosted
@@ -401,14 +403,14 @@ Setup and behavior:
   `admin_demo` without a password and spend the Groq free-tier quota. The
   hosted database only ever holds `seed_demo_if_empty`'s demo accounts,
   never real data.
-- **The database is not persistent.** Cloud's filesystem is wiped on every
-  restart, and apps sleep after ~12 h without visitors. The next visitor
+- **The full demo's database is not persistent** (the public test site's
+  is, through `persistence.py`; see "Public test site"). Cloud's filesystem
+  is wiped on every restart, and apps sleep after ~12 h without visitors. The next visitor
   clicks "wake up", waits about a minute (build cache plus ~10–40 s of
   seeding), and gets the identical fresh demo data again. Anything a
   visitor creates (accounts, chats, tests) is lost at the next restart.
-  Making it persistent would mean moving off the local SQLite file to an
-  external database, a large change touching every module that uses
-  `db.py`.
+  For the test site, persistence was solved without touching the queries:
+  the SQLite file is backed up to and restored from Supabase Storage.
 - **`requirements.txt` starts with
   `--extra-index-url https://download.pytorch.org/whl/cpu`.** Without it,
   Linux resolves `sentence-transformers` → torch with 15 `nvidia-*` CUDA
@@ -441,8 +443,21 @@ file and silently opens the existing one instead, which the user hit on
 their first try. Otherwise the test site differs only through its Secrets:
 `TUTORAI_PUBLIC_TEST = "1"`, `ADMIN_PASSWORD`, `TEACHER_PASSWORD`,
 `SECRET_KEY`, `FEEDBACK_FORM_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
-`SUPABASE_BUCKET`. They're read in `config.py`, and the full demo sets none
-of them. The setup guide for the user is in `README.md`.
+`SUPABASE_BUCKET`, plus the optional `RESEARCH_CONTACT` and
+`PROJECT_END_DATE` (default `2027-06-30`). They're read in `config.py`, and
+the full demo sets none of them. The setup guide for the user is in
+`README.md`. The user's own ready-to-paste copy of these secrets is
+`~/Desktop/TutorAI-secretos-sitio-de-prueba.toml`, outside the repo; never
+commit it. The test site's link is `socratictutordemo-prueba.streamlit.app`,
+and the full demo's is `socratictutordemo.streamlit.app`.
+
+**Updating a hosted app in place**: a git push makes Cloud re-run the
+script **without** restarting the process. Anything inside
+`@st.cache_resource` (e.g. `prepare_demo_data`) does **not** re-run
+unless that function's own source changes. Startup work that must reach
+an already-running site belongs outside the cache: for example,
+`forget_all_encrypted_passwords()` on every page load. This was found when
+a live check showed old password copies surviving a push.
 
 - **Backup of the pre-change site**:
   - The git tag `full-demo-2026-11-24` and branch `backup/full-demo` (both
@@ -517,17 +532,18 @@ of them. The setup guide for the user is in `README.md`.
   - In test mode only the last `PUBLIC_TEST_MAX_HISTORY_MESSAGES` (20)
     non-system messages are sent.
   - `chat.describe_error` shows a "wait a minute" message on rate limits.
+- **Chat fixes** (apply to both sites):
+  - `ask_tutor`/`ask_assistant`/`ask_logos_with_material` only append to
+    the history after a successful call, so a failed one (e.g. a rate
+    limit) leaves no unanswered message behind.
   - The student *Chat* screen calls `st.rerun()` right after saving a
-  reply. Its controls, including the hint button, are drawn above the
-  chat input from the history as it was before the new message. Without
-  the rerun, the hint button was missing after a new chat's first reply,
-  and otherwise sat above the newest reply. The user asked for it to be
-  available right after every reply. In AppTest, the run that follows
-  that rerun can show a stale extra bubble; a fresh load shows the
-  correct messages.
-- `ask_tutor`/`ask_assistant`/`ask_logos_with_material` now only append to
-    the history after a successful call, so a failed one leaves no
-    unanswered message behind.
+    reply. Its controls, including the hint button, are drawn above the
+    chat input from the history as it was before the new message. Without
+    the rerun, the hint button was missing after a new chat's first reply,
+    and otherwise sat above the newest reply. The user asked for it to be
+    available right after every reply. In AppTest, the run that follows
+    that rerun can show a stale extra bubble; a fresh load shows the
+    correct messages.
 
 ### Privacy / consent on the test site (added 2026-11-24, user in Madrid)
 The user asked for a consent box and "any other legal things". Real
@@ -535,8 +551,9 @@ testers, possibly minors, use the site, so the following was added. None
 of it applies to the full demo.
 - **No viewable passwords**: `users._encrypted_copy` stores
   `encrypted_password = NULL` in test mode. `get_plaintext_password`
-  always returns None there, and `ensure_public_test_accounts` calls
-  `users.forget_all_encrypted_passwords()` on every boot. The admin sees
+  always returns None there, and `app.py` calls
+  `users.forget_all_encrypted_passwords()` on every page load (see
+  "Updating a hosted app in place" above for why it's not cached). The admin sees
   `password_hidden_public_test` instead of a password. Login still uses
   the PBKDF2 hash.
 - **Signup consent**:
@@ -561,7 +578,10 @@ of it applies to the full demo.
   `question_bank`, `announcements` and `exercises`, which it used to miss.
   Backup snapshots rotate through 24 hour-of-day slots
   (`snapshots/tutorai-hour-HH.db`), so deleted data leaves every backup
-  within 24 h, as the notice promises.
+  within 24 h, as the notice promises. One older dated snapshot,
+  `snapshots/tutorai-20261124-20.db`, predates the rotation and isn't
+  overwritten. The user chose to leave it, since the end-date wipe deletes
+  it.
 - **AI transparency**: a caption above the chat input ("Estás hablando
   con una inteligencia artificial…"), plus lines in the guide and notice.
 - **Usernames**: hints asking for a nickname and a new password.

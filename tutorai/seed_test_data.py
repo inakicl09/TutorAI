@@ -898,7 +898,8 @@ def ensure_public_test_accounts() -> None:
     site only ever holds real testers."""
     ensure_all_subjects_teacher()
     # No reversible password copies on the test site (see
-    # users._encrypted_copy), including any saved before that rule.
+    # users._encrypted_copy), including any saved before that rule. app.py
+    # also runs this on every page load, since this setup is cached.
     users.forget_all_encrypted_passwords()
     if config.ADMIN_PASSWORD and not users.username_exists(config.PUBLIC_TEST_ADMIN_USERNAME):
         users.create_admin(config.PUBLIC_TEST_ADMIN_USERNAME, config.ADMIN_PASSWORD)

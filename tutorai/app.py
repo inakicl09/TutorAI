@@ -91,6 +91,14 @@ def prepare_demo_data() -> bool:
 
 prepare_demo_data()
 
+# No viewable passwords on the test site (see users._encrypted_copy). Run on
+# every page load, not inside the cached setup above: cache_resource only
+# re-runs when that function's own code changes, so a hosted app updated
+# in place by a git push (no restart) would otherwise never erase copies
+# saved by older code. A no-op write when there's nothing to erase.
+if config.PUBLIC_TEST_MODE:
+    users.forget_all_encrypted_passwords()
+
 if "username" not in st.session_state:
     st.session_state.username = None
 if "chats_loaded" not in st.session_state:
