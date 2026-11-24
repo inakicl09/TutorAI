@@ -59,7 +59,16 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "")
 
 # Supabase Storage, where persistence.py backs up the SQLite file. All
 # three must be set, otherwise persistence is off.
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+def clean_supabase_url(url: str) -> str:
+    """Accept the project URL even if it was copied with the REST API path
+    (https://xxxx.supabase.co/rest/v1/) -- only the base is wanted."""
+    url = url.strip().rstrip("/")
+    if url.endswith("/rest/v1"):
+        url = url[: -len("/rest/v1")]
+    return url
+
+
+SUPABASE_URL = clean_supabase_url(os.environ.get("SUPABASE_URL", ""))
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "")
 

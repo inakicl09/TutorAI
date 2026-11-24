@@ -167,3 +167,16 @@ def test_auth_headers_support_both_supabase_key_styles(monkeypatch, key, expects
     headers = persistence._auth_headers()
     assert headers["apikey"] == key
     assert ("Authorization" in headers) == expects_bearer
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://abc.supabase.co",
+        "https://abc.supabase.co/",
+        "https://abc.supabase.co/rest/v1/",
+        " https://abc.supabase.co/rest/v1 ",
+    ],
+)
+def test_clean_supabase_url_keeps_only_the_project_base(raw):
+    assert config.clean_supabase_url(raw) == "https://abc.supabase.co"
