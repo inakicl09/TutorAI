@@ -92,7 +92,9 @@ person's chats.
 1. https://share.streamlit.io → **Create app** → **Deploy a public app
    from GitHub**.
 2. Repository `inakicl09/TutorAI`, branch `main`, main file
-   `streamlit_app.py`. Under **App URL**, type a new name, e.g.
+   **`streamlit_app_prueba.py`**. It has to be this file, not
+   `streamlit_app.py`: Cloud won't create two apps from the same file and
+   just opens the existing full demo instead. Under **App URL**, type a new name, e.g.
    `socratictutordemo-prueba`. That gives
    `https://socratictutordemo-prueba.streamlit.app`.
 3. **Advanced settings** → Python **3.11** → paste the whole completed

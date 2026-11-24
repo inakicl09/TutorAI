@@ -431,8 +431,11 @@ Setup and behavior:
 
 Added 2026-11-24. The user wanted to send TutorAI to many testers, who give
 feedback in a separate Google Form, while keeping the full demo above as it
-is. Both apps deploy from the same repo/branch (`main`, `streamlit_app.py`).
-The test one differs only through its Secrets:
+is. Both apps deploy from the same repo/branch (`main`). The test one uses
+`streamlit_app_prueba.py`, an identical copy of `streamlit_app.py`.
+Community Cloud refuses a second app with the same repo + branch + main
+file and silently opens the existing one instead, which the user hit on
+their first try. Otherwise the test site differs only through its Secrets:
 `TUTORAI_PUBLIC_TEST = "1"`, `ADMIN_PASSWORD`, `TEACHER_PASSWORD`,
 `SECRET_KEY`, `FEEDBACK_FORM_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
 `SUPABASE_BUCKET`. They're read in `config.py`, and the full demo sets none
