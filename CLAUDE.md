@@ -463,6 +463,11 @@ of them. The setup guide for the user is in `README.md`.
     are picked at signup.
   - *Material*. The student RAG collection is shared by every student, so
     one tester's PDF would leak into everyone's chats.
+- **How-it-works guide**: a collapsed sidebar expander ("ℹ️ ¿Cómo
+  funciona TutorAI?", `how_it_works_header`/`how_it_works_body` in
+  `translations.py`) under the language picker, shown before and after
+  login, test site only. It also tells testers the organizer can read
+  their chats.
 - **Feedback**: `render_feedback_link()` shows an `st.link_button` to
   `FEEDBACK_FORM_URL`, on the login page and in every role's sidebar.
 - **Persistence** (`persistence.py`): the user explicitly wanted testers'

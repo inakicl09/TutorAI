@@ -132,6 +132,12 @@ with st.sidebar:
     )
     text = translations.TEXT[language]
 
+    # Optional, collapsed guide for testers -- shown before and after
+    # logging in, only on the public test site.
+    if config.PUBLIC_TEST_MODE:
+        with st.expander(text["how_it_works_header"]):
+            st.markdown(text["how_it_works_body"])
+
 def render_feedback_link() -> None:
     """Button to the external feedback questionnaire, if one is configured."""
     if config.FEEDBACK_FORM_URL:

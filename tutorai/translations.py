@@ -29,6 +29,38 @@ TEXT = {
             "a hablar con Socrates, tu tutor socrático. Tu cuenta y tus "
             "chats se guardan, así que puedes volver cuando quieras."
         ),
+        "how_it_works_header": "ℹ️ ¿Cómo funciona TutorAI?",
+        "how_it_works_body": """
+**Socrates es un tutor socrático.** No te da la respuesta directamente:
+te ayuda a llegar a ella con preguntas, como haría un buen profesor.
+
+**Cómo empezar**
+1. **Crea tu cuenta**: elige tu curso y 2 o 3 asignaturas.
+2. Ve a **Chat**, elige una asignatura y escribe tu duda o el ejercicio
+   en el que estás trabajando.
+3. Responde a sus preguntas. Cuanto más expliques lo que piensas, mejor
+   te podrá guiar.
+4. ¿Atascado? Pulsa **💡 Estoy atascado, dame una pista**. Te dará un
+   dato, una fórmula o un paso concreto, pero nunca la respuesta final:
+   el último paso es tuyo.
+
+**Otras pantallas**
+- **Notas**: guarda las explicaciones que te resulten útiles
+  (botón *Guardar nota* en el chat).
+- **Mi progreso**: cuántos chats y mensajes llevas.
+- **Ejercicios**, **Exámenes** y **Tarjetas**: aparecen cuando el
+  profesor publica ejercicios o exámenes. Cada pregunta que falles en
+  un examen se convierte en una tarjeta de repaso.
+- **🐛 Reportar un error**: si algo falla, cuéntanoslo desde aquí.
+
+**Tus datos**
+Tu cuenta y tus chats se guardan, así que puedes volver otro día.
+Es una versión de prueba: el organizador puede leer los chats para
+mejorar la aplicación, así que no escribas datos personales.
+
+**Cuando termines**, rellena el cuestionario con el botón
+**📝 Danos tu opinión**. ¡Gracias!
+""",
         "signup_subjects_label": "Elige 2 o 3 asignaturas",
         "signup_subjects_count_error": "Elige entre 2 y 3 asignaturas de tu curso.",
         "feedback_button": "📝 Danos tu opinión",
@@ -361,6 +393,38 @@ TEXT = {
             "talking to Socrates, your Socratic tutor. Your account and "
             "chats are saved, so you can come back any time."
         ),
+        "how_it_works_header": "ℹ️ How does TutorAI work?",
+        "how_it_works_body": """
+**Socrates is a Socratic tutor.** It doesn't hand you the answer: it
+helps you get there yourself with questions, like a good teacher would.
+
+**Getting started**
+1. **Create your account**: pick your grade and 2 or 3 subjects.
+2. Go to **Chat**, pick a subject and type your question or the
+   exercise you're working on.
+3. Answer its questions. The more you explain your thinking, the better
+   it can guide you.
+4. Stuck? Press **💡 I'm stuck, give me a hint**. It will give you a
+   fact, a formula or one concrete step, but never the final answer:
+   the last step is yours.
+
+**Other screens**
+- **Notes**: save explanations you find useful (*Save note* button in
+  the chat).
+- **My progress**: how many chats and messages you've had.
+- **Exercises**, **Tests** and **Flashcards**: appear when the teacher
+  publishes exercises or tests. Every test question you get wrong
+  becomes a flashcard to review.
+- **🐛 Report a bug**: if something breaks, tell us here.
+
+**Your data**
+Your account and chats are saved, so you can come back another day.
+This is a test version: the organizer can read chats to improve the
+app, so don't write personal information.
+
+**When you're done**, fill in the questionnaire with the
+**📝 Give us your feedback** button. Thank you!
+""",
         "signup_subjects_label": "Choose 2 or 3 subjects",
         "signup_subjects_count_error": "Choose between 2 and 3 subjects from your grade.",
         "feedback_button": "📝 Give us your feedback",
