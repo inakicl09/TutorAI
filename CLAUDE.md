@@ -596,9 +596,14 @@ of it applies to the full demo.
 
 - `tests/` mirrors `tutorai/` module-by-module (`tests/test_users.py`
   tests `tutorai/users.py`, etc.), using `pytest`.
-- `tests/conftest.py` has an autouse fixture that points `config.DB_PATH`
-  at a temp file and calls `db.init_db()` before every test, so the test
-  suite never touches `data/tutorai.db`.
+- `tests/conftest.py` has an autouse fixture that points `config.DB_PATH`,
+  `SECRET_KEY_PATH`, `CHROMA_DIR` and `DOCUMENTS_DIR` at temp paths and
+  calls `db.init_db()` before every test, so the test suite never touches
+  the real `data/`. The two folder paths were added after a
+  `project_end.wipe_everything()` test deleted the real
+  `data/chroma_db`/`data/documents` (restored from the
+  `~/Desktop/TutorAI-backup-2026-11-24.zip` backup). Any new config path
+  that code deletes must be redirected here too.
 - `rag.py` isn't unit tested — it needs the real `sentence-transformers`
   embedding model, which isn't worth mocking for this project's size.
   `chat.py` talks to Groq over the network, so its tests mock
