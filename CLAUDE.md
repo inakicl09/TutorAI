@@ -458,7 +458,11 @@ of them. The setup guide for the user is in `README.md`.
   `ADMIN_PASSWORD` is set. Both run at startup instead of
   `seed_demo_if_empty`, so the test site has no fake users. Both are
   idempotent, and existing passwords are never changed.
-- **Hidden screens** (`HIDDEN_IN_PUBLIC_TEST` in `app.py`):
+- **Hidden screens** (`HIDDEN_IN_PUBLIC_TEST` in `app.py`). Students
+  only see *Main menu* and *Chat*. The user wanted the test site to be
+  about trying the AI: Exercises, Notes, My progress, Tests and
+  Flashcards are hidden too, and so is the chat's "Save note" button,
+  since nothing would list those notes. Beyond those, it hides:
   - The student's *Link teacher* screen. There's one teacher, and subjects
     are picked at signup.
   - *Material*. The student RAG collection is shared by every student, so

@@ -44,14 +44,8 @@ te ayuda a llegar a ella con preguntas, como haría un buen profesor.
    dato, una fórmula o un paso concreto, pero nunca la respuesta final:
    el último paso es tuyo.
 
-**Otras pantallas**
-- **Notas**: guarda las explicaciones que te resulten útiles
-  (botón *Guardar nota* en el chat).
-- **Mi progreso**: cuántos chats y mensajes llevas.
-- **Ejercicios**, **Exámenes** y **Tarjetas**: aparecen cuando el
-  profesor publica ejercicios o exámenes. Cada pregunta que falles en
-  un examen se convierte en una tarjeta de repaso.
-- **🐛 Reportar un error**: si algo falla, cuéntanoslo desde aquí.
+Puedes abrir varios chats, uno por cada duda o asignatura. Si algo
+falla, cuéntanoslo con **🐛 Reportar un error**, en esta misma barra.
 
 **Tus datos**
 Tu cuenta y tus chats se guardan, así que puedes volver otro día.
@@ -408,14 +402,8 @@ helps you get there yourself with questions, like a good teacher would.
    fact, a formula or one concrete step, but never the final answer:
    the last step is yours.
 
-**Other screens**
-- **Notes**: save explanations you find useful (*Save note* button in
-  the chat).
-- **My progress**: how many chats and messages you've had.
-- **Exercises**, **Tests** and **Flashcards**: appear when the teacher
-  publishes exercises or tests. Every test question you get wrong
-  becomes a flashcard to review.
-- **🐛 Report a bug**: if something breaks, tell us here.
+You can open several chats, one per question or subject. If something
+breaks, tell us with **🐛 Report a bug**, in this same sidebar.
 
 **Your data**
 Your account and chats are saved, so you can come back another day.

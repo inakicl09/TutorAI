@@ -44,8 +44,10 @@ the full demo above only because its Secrets contain
 - When signing up, a student picks their grade and 2 or 3 of its subjects.
   They are linked automatically to `profesor_tutorai`, a teacher who
   teaches every subject in every grade.
-- There are no fake demo accounts. "Vincular profesor" and "Material" are
-  hidden.
+- There are no fake demo accounts. Students only see **Menú principal**
+  and **Chat**, because the test is about the AI tutor. Everything else
+  is hidden.
+- A collapsed "ℹ️ ¿Cómo funciona TutorAI?" guide sits in the sidebar.
 - A "📝 Danos tu opinión" button links to your Google Form.
 - Accounts and chats are **kept**: the database is backed up to Supabase
   Storage (free) and restored when the app restarts.

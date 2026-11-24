@@ -303,11 +303,25 @@ else:
         ],
     }
 
-    # Hidden on the public test site: there's a single shared teacher and
-    # subjects are picked at signup, so linking is moot; and student PDFs
-    # all go into one shared chromaDB collection, so one tester's upload
-    # would leak into everyone else's chats.
-    HIDDEN_IN_PUBLIC_TEST = {("student", "link_teacher"), ("student", "material")}
+    # Hidden on the public test site, which is only about trying the AI
+    # tutor (the user's ask: keep it simple, students see Main menu + Chat):
+    # - link_teacher: one shared teacher, subjects are picked at signup.
+    # - material: student PDFs all go into one shared chromaDB collection,
+    #   so one tester's upload would leak into everyone else's chats.
+    # - exercises/notes/progress/tests/flashcards: extra features that
+    #   distract from the chat, and mostly empty without teacher content.
+    HIDDEN_IN_PUBLIC_TEST = {
+        ("student", screen_id)
+        for screen_id in (
+            "link_teacher",
+            "material",
+            "exercises",
+            "notes",
+            "progress",
+            "tests",
+            "flashcards",
+        )
+    }
     if config.PUBLIC_TEST_MODE:
         SCREENS_BY_ROLE = {
             screen_role: [
@@ -1958,7 +1972,9 @@ else:
                         continue
                     with st.chat_message(message["role"]):
                         st.write(message["content"])
-                        if message["role"] == "assistant":
+                        # No "Save note" on the test site, where the
+                        # Notes screen that lists them is hidden.
+                        if message["role"] == "assistant" and not config.PUBLIC_TEST_MODE:
                             if st.button(
                                 text["save_note_button"],
                                 key=f"note_{active_chat['id']}_{msg_idx}",
