@@ -499,8 +499,17 @@ a live check showed old password copies surviving a push.
   - It's in the main page, not the sidebar, because phones hide the
     sidebar.
   - **After login**: a plain collapsed expander in the sidebar.
-- **Feedback**: `render_feedback_link()` shows an `st.link_button` to
-  `FEEDBACK_FORM_URL`, on the login page and in every role's sidebar.
+- **Feedback form**: `render_feedback_link()` shows a box on the login
+  page and in every role's sidebar.
+  - The box is the keyed container `feedback_highlight`, styled by
+    `FEEDBACK_HIGHLIGHT_CSS`: the same amber look and pulse as the guide.
+    It holds the `feedback_caption` note ("⭐ Muy importante para el
+    proyecto…") and a full-width amber `st.link_button` labelled "📝
+    Rellenar formulario", linking to `FEEDBACK_FORM_URL`.
+  - The user renamed it from "Danos tu opinión" and asked to stress that
+    the form matters for their research.
+  - The button CSS targets `[data-testid^="stBaseLinkButton"]` with
+    `!important`, checked against Streamlit 1.50's bundle.
 - **Persistence** (`persistence.py`): the user explicitly wanted testers'
   accounts to survive restarts. The SQLite file is restored from Supabase
   Storage (free plan) before `db.init_db()`, and uploaded by a background

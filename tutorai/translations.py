@@ -63,8 +63,8 @@ Es una versión de prueba: el organizador puede leer los chats para
 mejorar la aplicación, así que no escribas datos personales. Puedes
 borrar tu cuenta y tus datos cuando quieras desde el *Menú principal*.
 
-**Cuando termines**, rellena el cuestionario con el botón
-**📝 Danos tu opinión**. ¡Gracias!
+**Cuando termines, rellena el formulario** con el botón
+**📝 Rellenar formulario**: es imprescindible para el proyecto. ¡Gracias!
 """,
         "signup_username_hint": "Usa un apodo, no tu nombre real.",
         "signup_password_hint": "Usa una contraseña nueva, que no uses en otras webs.",
@@ -110,7 +110,7 @@ Agencia Española de Protección de Datos (www.aepd.es).
 **Inteligencia artificial:** Socrates es una IA y puede equivocarse. Es
 una herramienta de estudio y no sustituye a tu profesor.
 """,
-        "privacy_contact_fallback": "el organizador del proyecto, a través del cuestionario de opinión",
+        "privacy_contact_fallback": "el organizador del proyecto, a través del formulario",
         "consent_research_checkbox": (
             "Acepto que mis datos (usuario, curso, asignaturas y conversaciones) "
             "se recojan y se usen únicamente para este proyecto de investigación "
@@ -138,8 +138,12 @@ una herramienta de estudio y no sustituye a tu profesor.
         ),
         "signup_subjects_label": "Elige 2 o 3 asignaturas",
         "signup_subjects_count_error": "Elige entre 2 y 3 asignaturas de tu curso.",
-        "feedback_button": "📝 Danos tu opinión",
-        "feedback_caption": "Cuando hayas probado TutorAI, rellena este cuestionario:",
+        "feedback_button": "📝 Rellenar formulario",
+        "feedback_caption": (
+            "⭐ **Muy importante para el proyecto:** cuando hayas probado "
+            "TutorAI, rellena el formulario. Tus respuestas son imprescindibles "
+            "para la investigación. ¡Gracias!"
+        ),
         "rate_limit_error": (
             "Ahora mismo hay mucha gente usando TutorAI. Espera un minuto y "
             "vuelve a enviar tu mensaje."
@@ -493,8 +497,8 @@ This is a test version: the organizer can read chats to improve the
 app, so don't write personal information. You can delete your account
 and data any time from the *Main menu*.
 
-**When you're done**, fill in the questionnaire with the
-**📝 Give us your feedback** button. Thank you!
+**When you're done, fill in the form** with the **📝 Fill in the
+form** button: it's essential for the project. Thank you!
 """,
         "signup_username_hint": "Use a nickname, not your real name.",
         "signup_password_hint": "Use a new password you don't use on other websites.",
@@ -538,7 +542,7 @@ Data Protection Agency (www.aepd.es).
 **Artificial intelligence:** Socrates is an AI and can make mistakes.
 It's a study tool, not a replacement for your teacher.
 """,
-        "privacy_contact_fallback": "the project organizer, through the feedback questionnaire",
+        "privacy_contact_fallback": "the project organizer, through the form",
         "consent_research_checkbox": (
             "I agree that my data (username, grade, subjects and conversations) "
             "is collected and used only for this school research project, as "
@@ -566,8 +570,12 @@ It's a study tool, not a replacement for your teacher.
         ),
         "signup_subjects_label": "Choose 2 or 3 subjects",
         "signup_subjects_count_error": "Choose between 2 and 3 subjects from your grade.",
-        "feedback_button": "📝 Give us your feedback",
-        "feedback_caption": "Once you've tried TutorAI, please fill in this questionnaire:",
+        "feedback_button": "📝 Fill in the form",
+        "feedback_caption": (
+            "⭐ **Very important for the project:** once you've tried "
+            "TutorAI, please fill in the form. Your answers are essential "
+            "for the research. Thank you!"
+        ),
         "rate_limit_error": (
             "Lots of people are using TutorAI right now. Wait a minute and "
             "send your message again."

@@ -197,10 +197,55 @@ def render_highlighted_how_it_works() -> None:
         with st.expander(text["how_it_works_cta"]):
             st.markdown(text["how_it_works_body"])
 
+# Same amber look as the how-it-works guide, for the feedback form box: the
+# form is what the user's research project depends on. The box is the
+# keyed container itself; the button is Streamlit's link button, an <a>
+# with data-testid "stBaseLinkButton-secondary" (checked against
+# Streamlit 1.50's bundle). !important because Streamlit styles the
+# button, including :hover, with its own classes.
+FEEDBACK_HIGHLIGHT_CSS = """
+<style>
+.st-key-feedback_highlight {
+    border: 2px solid #f59e0b;
+    border-radius: 0.75rem;
+    background: rgba(245, 158, 11, 0.12);
+    padding: 0.75rem 0.9rem;
+    animation: tutorai-pulse 1.8s ease-in-out 3;
+}
+.st-key-feedback_highlight [data-testid^="stBaseLinkButton"] {
+    background: #f59e0b !important;
+    border-color: #d97706 !important;
+    color: #1f2937 !important;
+    font-weight: 700;
+}
+.st-key-feedback_highlight [data-testid^="stBaseLinkButton"] * {
+    color: #1f2937 !important;
+    font-weight: 700;
+}
+.st-key-feedback_highlight [data-testid^="stBaseLinkButton"]:hover {
+    background: #fbbf24 !important;
+}
+@keyframes tutorai-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    50% { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .st-key-feedback_highlight { animation: none; }
+}
+</style>
+"""
+
+
 def render_feedback_link() -> None:
-    """Button to the external feedback questionnaire, if one is configured."""
-    if config.FEEDBACK_FORM_URL:
-        st.link_button(text["feedback_button"], config.FEEDBACK_FORM_URL)
+    """Highlighted box with a note on why the form matters and a full-width
+    button to it, if a form is configured. Shown on the login page and in
+    every role's sidebar -- never both in one run, so the key is unique."""
+    if not config.FEEDBACK_FORM_URL:
+        return
+    st.markdown(FEEDBACK_HIGHLIGHT_CSS, unsafe_allow_html=True)
+    with st.container(key="feedback_highlight"):
+        st.markdown(text["feedback_caption"])
+        st.link_button(text["feedback_button"], config.FEEDBACK_FORM_URL, width="stretch")
 
 
 def render_public_test_signup(username_input: str, password_input: str) -> None:
@@ -320,7 +365,6 @@ if st.session_state.username is None:
 
     if config.PUBLIC_TEST_MODE:
         st.divider()
-        st.caption(text["feedback_caption"])
         render_feedback_link()
     else:
         # --- TEMPORARY: remove this block once the project is finished ---

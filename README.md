@@ -63,7 +63,9 @@ the full demo above only because its Secrets contain
 - Optional secret `RESEARCH_CONTACT = "tu-email@ejemplo.com"`: the
   contact shown in the privacy notice. Without it, the notice points to
   the feedback form.
-- A "📝 Danos tu opinión" button links to your Google Form.
+- A highlighted amber box with a **"📝 Rellenar formulario"** button links to
+  your Google Form, with a note that filling it in is essential for the
+  project. It's on the login page and in the sidebar.
 - Accounts and chats are **kept**: the database is backed up to Supabase
   Storage (free) and restored when the app restarts.
 - When Groq's free limit is hit, it switches to the other free model, and
