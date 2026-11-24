@@ -132,10 +132,50 @@ with st.sidebar:
     )
     text = translations.TEXT[language]
 
-    # Optional, collapsed guide for testers -- shown before and after
-    # logging in, only on the public test site.
-    if config.PUBLIC_TEST_MODE:
+    # Optional, collapsed guide for testers on the public test site, once
+    # logged in. Before login it's shown in the main page instead,
+    # highlighted (see render_highlighted_how_it_works), since phones hide
+    # the sidebar behind a button.
+    if config.PUBLIC_TEST_MODE and st.session_state.username is not None:
         with st.expander(text["how_it_works_header"]):
+            st.markdown(text["how_it_works_body"])
+
+
+# Amber border + tinted background + a short pulse (3 times, then still;
+# none at all for people who ask their OS for reduced motion), scoped to
+# the container keyed "how_it_works_highlight" so no other expander
+# changes. Semi-transparent colors so it reads in light and dark themes.
+HOW_IT_WORKS_HIGHLIGHT_CSS = """
+<style>
+.st-key-how_it_works_highlight [data-testid="stExpander"] details {
+    border: 2px solid #f59e0b;
+    border-radius: 0.75rem;
+    background: rgba(245, 158, 11, 0.12);
+    animation: tutorai-pulse 1.8s ease-in-out 3;
+}
+.st-key-how_it_works_highlight [data-testid="stExpander"] summary p {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+@keyframes tutorai-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    50% { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .st-key-how_it_works_highlight [data-testid="stExpander"] details {
+        animation: none;
+    }
+}
+</style>
+"""
+
+
+def render_highlighted_how_it_works() -> None:
+    """The how-it-works guide on the login page, made to stand out so
+    testers read it before creating an account."""
+    st.markdown(HOW_IT_WORKS_HIGHLIGHT_CSS, unsafe_allow_html=True)
+    with st.container(key="how_it_works_highlight"):
+        with st.expander(text["how_it_works_cta"]):
             st.markdown(text["how_it_works_body"])
 
 def render_feedback_link() -> None:
@@ -188,6 +228,7 @@ if st.session_state.username is None:
 
     if config.PUBLIC_TEST_MODE:
         st.info(text["public_test_intro"])
+        render_highlighted_how_it_works()
         # Signup first, so it's what a new tester lands on.
         auth_options = [text["signup_tab"], text["login_tab"]]
     else:
@@ -2034,6 +2075,14 @@ else:
 
                     chat_storage.add_message(active_chat["id"], "user", student_message)
                     chat_storage.add_message(active_chat["id"], "assistant", tutor_reply)
+
+                    # Redraw with the new exchange as part of the history.
+                    # The hint button (and every per-message control) is
+                    # drawn ABOVE this point, from the history as it was
+                    # before this message -- without the rerun, the button
+                    # was missing after a new chat's first reply and sat
+                    # above the latest reply instead of below it.
+                    st.rerun()
 
         elif screen == "tests":
             st.header(text["available_tests_header"])

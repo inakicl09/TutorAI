@@ -30,6 +30,7 @@ TEXT = {
             "chats se guardan, así que puedes volver cuando quieras."
         ),
         "how_it_works_header": "ℹ️ ¿Cómo funciona TutorAI?",
+        "how_it_works_cta": "👉 ¿Primera vez aquí? Mira cómo funciona TutorAI (1 minuto)",
         "how_it_works_body": """
 **Socrates es un tutor socrático.** No te da la respuesta directamente:
 te ayuda a llegar a ella con preguntas, como haría un buen profesor.
@@ -388,6 +389,7 @@ mejorar la aplicación, así que no escribas datos personales.
             "chats are saved, so you can come back any time."
         ),
         "how_it_works_header": "ℹ️ How does TutorAI work?",
+        "how_it_works_cta": "👉 First time here? See how TutorAI works (1 minute)",
         "how_it_works_body": """
 **Socrates is a Socratic tutor.** It doesn't hand you the answer: it
 helps you get there yourself with questions, like a good teacher would.

@@ -467,11 +467,20 @@ of them. The setup guide for the user is in `README.md`.
     are picked at signup.
   - *Material*. The student RAG collection is shared by every student, so
     one tester's PDF would leak into everyone's chats.
-- **How-it-works guide**: a collapsed sidebar expander ("ℹ️ ¿Cómo
-  funciona TutorAI?", `how_it_works_header`/`how_it_works_body` in
-  `translations.py`) under the language picker, shown before and after
-  login, test site only. It also tells testers the organizer can read
-  their chats.
+- **How-it-works guide** (`how_it_works_*` keys in `translations.py`,
+  test site only). It also tells testers the organizer can read their
+  chats.
+  - **Before login**: shown in the main page, above the signup form, as
+    an expander labelled "👉 ¿Primera vez aquí?…" (`render_highlighted_how_it_works`).
+    It's highlighted with scoped CSS: an amber border and tint, plus a
+    3× pulse, turned off under `prefers-reduced-motion`. The CSS targets
+    `.st-key-how_it_works_highlight [data-testid="stExpander"] details`,
+    which was checked against Streamlit 1.50's bundle (`details`/`summary`
+    elements). Headless-Chrome screenshots stay blank, so it can't be
+    verified visually from here.
+  - It's in the main page, not the sidebar, because phones hide the
+    sidebar.
+  - **After login**: a plain collapsed expander in the sidebar.
 - **Feedback**: `render_feedback_link()` shows an `st.link_button` to
   `FEEDBACK_FORM_URL`, on the login page and in every role's sidebar.
 - **Persistence** (`persistence.py`): the user explicitly wanted testers'
@@ -505,7 +514,15 @@ of them. The setup guide for the user is in `README.md`.
   - In test mode only the last `PUBLIC_TEST_MAX_HISTORY_MESSAGES` (20)
     non-system messages are sent.
   - `chat.describe_error` shows a "wait a minute" message on rate limits.
-  - `ask_tutor`/`ask_assistant`/`ask_logos_with_material` now only append to
+  - The student *Chat* screen calls `st.rerun()` right after saving a
+  reply. Its controls, including the hint button, are drawn above the
+  chat input from the history as it was before the new message. Without
+  the rerun, the hint button was missing after a new chat's first reply,
+  and otherwise sat above the newest reply. The user asked for it to be
+  available right after every reply. In AppTest, the run that follows
+  that rerun can show a stale extra bubble; a fresh load shows the
+  correct messages.
+- `ask_tutor`/`ask_assistant`/`ask_logos_with_material` now only append to
     the history after a successful call, so a failed one leaves no
     unanswered message behind.
 
