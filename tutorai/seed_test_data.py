@@ -21,9 +21,10 @@ on startup, for the hosted demo whose database starts empty on every boot.
 """
 
 import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
-from tutorai import chat_storage, classes, db, homerooms, prompts, subjects, users
+from tutorai import chat_storage, classes, config, db, homerooms, prompts, subjects, users
 
 PASSWORD = "1234"
 NUM_TEACHERS = 10
@@ -866,6 +867,38 @@ def seed_demo_if_empty() -> bool:
     student_usernames = seed_students(teacher_usernames)
     seed_chat_activity(student_usernames)
     return True
+
+
+def ensure_all_subjects_teacher() -> str:
+    """Make sure the public test site's shared teacher exists and teaches
+    every (grade, subject) in the curriculum, so any student can be linked
+    to it for whatever they pick at signup. Safe to call on every startup:
+    an existing account keeps its password, and assignments it already
+    has are skipped. Returns the teacher's username."""
+    username = config.PUBLIC_TEST_TEACHER_USERNAME
+    if not users.username_exists(username):
+        password = config.TEACHER_PASSWORD or secrets.token_urlsafe(16)
+        users.create_teacher(username, password)
+
+    already_taught = {
+        (assignment["grade"], assignment["subject"])
+        for assignment in users.get_user(username)["teaching"]
+    }
+    for grade, grade_subjects in subjects.GRADE_SUBJECTS.items():
+        for subject in grade_subjects:
+            if (grade, subject) not in already_taught:
+                users.add_teaching_assignment(username, grade, subject)
+    return username
+
+
+def ensure_public_test_accounts() -> None:
+    """Startup setup for the public test site: the shared teacher, plus the
+    owner's admin account if ADMIN_PASSWORD is set. Unlike
+    seed_demo_if_empty, it never adds fake students or teachers, so the
+    site only ever holds real testers."""
+    ensure_all_subjects_teacher()
+    if config.ADMIN_PASSWORD and not users.username_exists(config.PUBLIC_TEST_ADMIN_USERNAME):
+        users.create_admin(config.PUBLIC_TEST_ADMIN_USERNAME, config.ADMIN_PASSWORD)
 
 
 def main() -> None:

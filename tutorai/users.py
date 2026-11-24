@@ -35,6 +35,11 @@ PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6
 JOIN_CODE_CHARACTERS = string.ascii_uppercase + string.digits
 
+# How many subjects a student picks when signing up on the public test
+# site (see create_student_with_subjects).
+MIN_SIGNUP_SUBJECTS = 2
+MAX_SIGNUP_SUBJECTS = 3
+
 
 def _hash_password(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac(
@@ -142,6 +147,39 @@ def create_student(username: str, password: str, grade: str) -> None:
         connection.commit()
     finally:
         connection.close()
+
+
+def create_student_with_subjects(
+    username: str,
+    password: str,
+    grade: str,
+    chosen_subjects: list[str],
+    teacher_username: str,
+) -> None:
+    """Sign up a student and link them straight away to `teacher_username`
+    for each chosen subject of their own grade. Used by the public test
+    site, where one shared teacher teaches every subject.
+
+    Raises ValueError -- before creating anything, so a bad request never
+    leaves a half-made account -- if the grade is unknown, the number of
+    distinct subjects isn't MIN..MAX_SIGNUP_SUBJECTS, a subject isn't
+    offered at that grade, or the username is taken.
+    """
+    if grade not in subjects.GRADE_SUBJECTS:
+        raise ValueError("Unknown grade")
+    distinct_subjects = list(dict.fromkeys(chosen_subjects))
+    if not MIN_SIGNUP_SUBJECTS <= len(distinct_subjects) <= MAX_SIGNUP_SUBJECTS:
+        raise ValueError(
+            f"Choose between {MIN_SIGNUP_SUBJECTS} and {MAX_SIGNUP_SUBJECTS} subjects"
+        )
+    if any(subject not in subjects.GRADE_SUBJECTS[grade] for subject in distinct_subjects):
+        raise ValueError("A chosen subject isn't offered at that grade")
+    if username_exists(username):
+        raise ValueError("Username already exists")
+
+    create_student(username, password, grade)
+    for subject in distinct_subjects:
+        link_student_to_teacher(username, teacher_username, grade, subject)
 
 
 def create_teacher(username: str, password: str) -> str:

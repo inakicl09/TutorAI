@@ -199,3 +199,75 @@ def test_use_dollar_math_leaves_plain_text_and_dollars_alone():
     reply = "Piensa en $x^2 - 5x + 6 = 0$ y dime que pares multiplican 6."
 
     assert chat._use_dollar_math(reply) == reply
+
+
+def _rate_limit_error():
+    import httpx
+    from openai import RateLimitError
+
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    return RateLimitError(
+        "rate limited", response=httpx.Response(429, request=request), body=None
+    )
+
+
+def _fake_models(*model_ids):
+    listing = MagicMock()
+    listing.data = [MagicMock(id=model_id) for model_id in model_ids]
+    return listing
+
+
+def test_rate_limited_model_falls_back_to_the_other_gpt_oss_model():
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.models.list.return_value = _fake_models(
+            "openai/gpt-oss-120b", "openai/gpt-oss-20b"
+        )
+        mock_client.chat.completions.create.side_effect = [
+            _rate_limit_error(),
+            make_fake_completion("fallback reply"),
+        ]
+        reply = chat.ask_assistant([], "hola", "openai/gpt-oss-120b")
+
+    assert reply == "fallback reply"
+    used_models = [c.kwargs["model"] for c in mock_client.chat.completions.create.call_args_list]
+    assert used_models == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+
+
+def test_rate_limit_on_every_model_raises_and_leaves_history_untouched():
+    from openai import RateLimitError
+
+    history = [{"role": "system", "content": "sys"}]
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.models.list.return_value = _fake_models(
+            "openai/gpt-oss-120b", "openai/gpt-oss-20b"
+        )
+        mock_client.chat.completions.create.side_effect = _rate_limit_error()
+        try:
+            chat.ask_assistant(history, "hola", "openai/gpt-oss-120b")
+            raised = None
+        except RateLimitError as error:
+            raised = error
+
+    assert raised is not None
+    assert history == [{"role": "system", "content": "sys"}]
+    text = {"rate_limit_error": "busy", "ollama_disconnected": "offline"}
+    assert chat.describe_error(raised, text) == "busy"
+    assert chat.describe_error(RuntimeError("boom"), text) == "offline"
+
+
+def test_public_test_mode_sends_only_recent_history(monkeypatch):
+    monkeypatch.setattr(chat.config, "PUBLIC_TEST_MODE", True)
+    monkeypatch.setattr(chat.config, "PUBLIC_TEST_MAX_HISTORY_MESSAGES", 4)
+    history = [{"role": "system", "content": "sys"}] + [
+        {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"} for i in range(10)
+    ]
+
+    with patch("tutorai.chat._client") as mock_client:
+        mock_client.chat.completions.create.return_value = make_fake_completion("ok")
+        chat.ask_assistant(history, "latest")
+
+    sent = mock_client.chat.completions.create.call_args.kwargs["messages"]
+    assert sent[0] == {"role": "system", "content": "sys"}
+    assert [m["content"] for m in sent[1:]] == ["m7", "m8", "m9", "latest"]
+    # The stored history itself is never trimmed.
+    assert len(history) == 13

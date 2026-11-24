@@ -23,6 +23,22 @@ TEXT = {
             "la app de verdad."
         ),
         "dev_login_label": "Usuario (modo de prueba)",
+        "public_test_intro": (
+            "Bienvenido/a a la versión de prueba de TutorAI. Crea tu cuenta "
+            "de alumno: elige tu curso y entre 2 y 3 asignaturas, y empieza "
+            "a hablar con Socrates, tu tutor socrático. Tu cuenta y tus "
+            "chats se guardan, así que puedes volver cuando quieras."
+        ),
+        "signup_subjects_label": "Elige 2 o 3 asignaturas",
+        "signup_subjects_count_error": "Elige entre 2 y 3 asignaturas de tu curso.",
+        "feedback_button": "📝 Danos tu opinión",
+        "feedback_caption": "Cuando hayas probado TutorAI, rellena este cuestionario:",
+        "rate_limit_error": (
+            "Ahora mismo hay mucha gente usando TutorAI. Espera un minuto y "
+            "vuelve a enviar tu mensaje."
+        ),
+        "backup_warning": "Copia de seguridad de la base de datos: {error}",
+        "backup_status_ok": "Copia de seguridad activa (Supabase).",
         "dev_login_button": "Entrar como este usuario",
         "cli_login_or_signup": "1. Iniciar sesión\n2. Crear cuenta",
         "cli_username_prompt": "Usuario: ",
@@ -339,6 +355,22 @@ TEXT = {
             "temporary and must be removed before using the app for real."
         ),
         "dev_login_label": "User (test mode)",
+        "public_test_intro": (
+            "Welcome to the TutorAI test version. Create your student "
+            "account: pick your grade and 2 to 3 subjects, then start "
+            "talking to Socrates, your Socratic tutor. Your account and "
+            "chats are saved, so you can come back any time."
+        ),
+        "signup_subjects_label": "Choose 2 or 3 subjects",
+        "signup_subjects_count_error": "Choose between 2 and 3 subjects from your grade.",
+        "feedback_button": "📝 Give us your feedback",
+        "feedback_caption": "Once you've tried TutorAI, please fill in this questionnaire:",
+        "rate_limit_error": (
+            "Lots of people are using TutorAI right now. Wait a minute and "
+            "send your message again."
+        ),
+        "backup_warning": "Database backup: {error}",
+        "backup_status_ok": "Database backup active (Supabase).",
         "dev_login_button": "Log in as this user",
         "cli_login_or_signup": "1. Log in\n2. Sign up",
         "cli_username_prompt": "Username: ",

@@ -17,6 +17,11 @@ without a password. The public demo on Streamlit Cloud deliberately
 the hosted database holds nothing but resettable demo accounts. If real
 users ever go on the hosted copy, this block must go first.
 
+The **public test site** (second Cloud app, `TUTORAI_PUBLIC_TEST = "1"`,
+see "Public test site" below) never shows the block: `app.py` only renders
+it when `config.PUBLIC_TEST_MODE` is off. That site holds real testers'
+accounts, so the dropdown must never appear there.
+
 ## What this is
 
 A Socratic tutoring app for Spanish secondary school students (1º ESO to
@@ -348,6 +353,9 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   `runpy.run_module("tutorai.app", run_name="__main__")`. It must be
   `run_module`, not `import tutorai.app`: Streamlit re-executes the main
   script on every click, and a plain import only runs the module once.
+- `persistence.py` — Supabase Storage backup/restore of the SQLite file
+  for the public test site; a no-op unless the Supabase secrets are set.
+  See "Public test site".
 - `seed_test_data.py` — besides the manual `python -m tutorai.seed_test_data`
   script, it holds `seed_demo_if_empty()`, which `app.py` calls on startup
   (inside `@st.cache_resource`, so once per server process). On an empty
@@ -418,6 +426,76 @@ Setup and behavior:
   dropdown, and the database ended up with 131 accounts and 611 chats.
   Headless Chrome screenshots were useless for this, because they capture
   before Streamlit's websocket paints anything and leave the page blank.
+
+## Public test site (second Streamlit Cloud app)
+
+Added 2026-11-24. The user wanted to send TutorAI to many testers, who give
+feedback in a separate Google Form, while keeping the full demo above as it
+is. Both apps deploy from the same repo/branch (`main`, `streamlit_app.py`).
+The test one differs only through its Secrets:
+`TUTORAI_PUBLIC_TEST = "1"`, `ADMIN_PASSWORD`, `TEACHER_PASSWORD`,
+`SECRET_KEY`, `FEEDBACK_FORM_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`SUPABASE_BUCKET`. They're read in `config.py`, and the full demo sets none
+of them. The setup guide for the user is in `README.md`.
+
+- **Backup of the pre-change site**:
+  - The git tag `full-demo-2026-11-24` and branch `backup/full-demo` (both
+    pushed) mark commit `97179b2`.
+  - A local zip `~/Desktop/TutorAI-backup-2026-11-24.zip` holds the project
+    without `.venv`, including the gitignored `data/` and `.env`.
+- **Signup** (`app.py`'s `render_public_test_signup`):
+  - "Crear cuenta" is the default radio option, and only students can sign
+    up.
+  - The student picks a grade and 2–3 of its subjects. That's
+    `users.create_student_with_subjects`, which validates everything before
+    creating anything, then links each subject to the shared teacher.
+- **Shared teacher**: `seed_test_data.ensure_all_subjects_teacher()` keeps
+  `profesor_tutorai` teaching every `(grade, subject)` in `subjects.py`
+  (104 classes). `ensure_public_test_accounts()` also creates `admin` if
+  `ADMIN_PASSWORD` is set. Both run at startup instead of
+  `seed_demo_if_empty`, so the test site has no fake users. Both are
+  idempotent, and existing passwords are never changed.
+- **Hidden screens** (`HIDDEN_IN_PUBLIC_TEST` in `app.py`):
+  - The student's *Link teacher* screen. There's one teacher, and subjects
+    are picked at signup.
+  - *Material*. The student RAG collection is shared by every student, so
+    one tester's PDF would leak into everyone's chats.
+- **Feedback**: `render_feedback_link()` shows an `st.link_button` to
+  `FEEDBACK_FORM_URL`, on the login page and in every role's sidebar.
+- **Persistence** (`persistence.py`): the user explicitly wanted testers'
+  accounts to survive restarts. The SQLite file is restored from Supabase
+  Storage (free plan) before `db.init_db()`, and uploaded by a background
+  thread (sqlite3 backup API) every ~15 s when it has changed, plus an hourly
+  `snapshots/` copy, a `flush_now()` after each signup, and an `atexit`
+  flush.
+  - Chosen over moving to Postgres because every query stays SQLite.
+  - Safety rule: uploads turn on only after a successful restore or a
+    definite "no backup yet" (404, or Supabase's 400 + `not_found`). Any
+    other failure leaves uploads off for that process, with the error shown
+    on the admin main menu, so an empty DB can never overwrite the backup.
+  - A `data/tutorai.db.backup-ok` marker tells a process restarted in the
+    same container that its local copy is trusted.
+  - Accepts both Supabase key styles: `sb_secret_...` goes in the `apikey`
+    header only, and the legacy JWT `service_role` key also goes as a
+    Bearer token.
+  - Known limit: an abrupt kill loses up to ~15 s. Chroma isn't backed up,
+    which is fine since *Material* is hidden.
+  - `crypto.py` uses the `SECRET_KEY` setting if present. Otherwise a
+    restored DB's encrypted passwords would be undecryptable, because the
+    key file is wiped too. `decrypt_password` now returns None on a key
+    mismatch instead of crashing the admin screens.
+- **Groq free-tier capacity** (the user's rule: the project must stay 100%
+  free; never upgrade or pay for anything, and don't pool several free
+  accounts, since Groq's terms forbid evading limits):
+  - `chat._call_groq_chat` retries a `RateLimitError` on the other
+    `RATE_LIMIT_FALLBACK_MODELS` entry (gpt-oss-120b ↔ gpt-oss-20b; limits
+    are per model).
+  - In test mode only the last `PUBLIC_TEST_MAX_HISTORY_MESSAGES` (20)
+    non-system messages are sent.
+  - `chat.describe_error` shows a "wait a minute" message on rate limits.
+  - `ask_tutor`/`ask_assistant`/`ask_logos_with_material` now only append to
+    the history after a successful call, so a failed one leaves no
+    unanswered message behind.
 
 ## Testing
 

@@ -291,3 +291,53 @@ def test_delete_user_removes_teacher_and_their_assignments():
 def test_delete_user_rejects_unknown_username():
     with pytest.raises(ValueError):
         users.delete_user("nobody")
+
+
+def _make_all_subjects_teacher(username: str = "profe_todo") -> str:
+    users.create_teacher(username, "pw")
+    for subject in ["Matemáticas", "Música", "Religión", "Tutoría"]:
+        users.add_teaching_assignment(username, "1º ESO", subject)
+    return username
+
+
+@pytest.mark.parametrize("chosen", [["Matemáticas", "Música"], ["Matemáticas", "Música", "Tutoría"]])
+def test_create_student_with_subjects_links_each_chosen_subject(chosen):
+    teacher = _make_all_subjects_teacher()
+
+    users.create_student_with_subjects("ana", "pw", "1º ESO", chosen, teacher)
+
+    student = users.get_user("ana")
+    assert student["grade"] == "1º ESO"
+    assert sorted(link["subject"] for link in student["subject_links"]) == sorted(chosen)
+    assert all(link["teacher"] == teacher for link in student["subject_links"])
+    assert users.verify_login("ana", "pw")
+
+
+@pytest.mark.parametrize(
+    "chosen",
+    [
+        ["Matemáticas"],  # too few
+        ["Matemáticas", "Música", "Religión", "Tutoría"],  # too many
+        ["Matemáticas", "Matemáticas"],  # duplicates count once -> too few
+        ["Matemáticas", "Filosofía"],  # Filosofía isn't a 1º ESO subject
+    ],
+)
+def test_create_student_with_subjects_rejects_bad_choices_without_creating_anything(chosen):
+    teacher = _make_all_subjects_teacher()
+
+    with pytest.raises(ValueError):
+        users.create_student_with_subjects("ana", "pw", "1º ESO", chosen, teacher)
+
+    assert not users.username_exists("ana")
+
+
+def test_create_student_with_subjects_rejects_taken_username():
+    teacher = _make_all_subjects_teacher()
+    users.create_student("ana", "original", "2º ESO")
+
+    with pytest.raises(ValueError):
+        users.create_student_with_subjects(
+            "ana", "pw", "1º ESO", ["Matemáticas", "Música"], teacher
+        )
+
+    assert users.verify_login("ana", "original")

@@ -6,7 +6,7 @@ exam material as RAG context, and Artemis (admin), which never uses RAG.
 
 from typing import Optional
 
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from tutorai import config, prompts, rag
 
@@ -17,6 +17,13 @@ from tutorai import config, prompts, rag
 # in any environment without GROQ_API_KEY set (pytest, scripts). The app
 # checks is_api_key_configured() and shows its own error instead.
 _client = None
+
+# Groq's free-tier limits are counted per model, so when the chosen model
+# is rate-limited, the same request is retried on the other models below
+# (only ones live on the account). Deliberately just the gpt-oss pair:
+# other models on the account either reply poorly in Spanish or put their
+# reasoning straight into the reply text.
+RATE_LIMIT_FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 
 
 def _get_client() -> OpenAI:
@@ -69,19 +76,66 @@ def _use_dollar_math(reply: str) -> str:
     return reply
 
 
+def _trim_history(messages: list[dict]) -> list[dict]:
+    """On the public test site, keep the system prompt(s) but only the last
+    config.PUBLIC_TEST_MAX_HISTORY_MESSAGES other messages, so long chats
+    don't burn through the shared free tokens-per-minute quota. Elsewhere
+    the full history is sent, as before."""
+    if not config.PUBLIC_TEST_MODE:
+        return messages
+    system_messages = [m for m in messages if m["role"] == "system"]
+    other_messages = [m for m in messages if m["role"] != "system"]
+    return system_messages + other_messages[-config.PUBLIC_TEST_MAX_HISTORY_MESSAGES:]
+
+
+def _fallback_models(model_name: str) -> list[str]:
+    """Other models to retry on after `model_name` is rate-limited."""
+    if model_name not in RATE_LIMIT_FALLBACK_MODELS:
+        return []
+    try:
+        available_ids = {m.id for m in _get_client().models.list().data}
+    except Exception:
+        return []
+    return [
+        m for m in RATE_LIMIT_FALLBACK_MODELS if m != model_name and m in available_ids
+    ]
+
+
 def _call_groq_chat(messages: list[dict], model_name: str) -> str:
     """Send a list of messages to Groq and return the reply text.
 
     Strips all fields except role/content before sending -- Groq rejects
     any extra properties (e.g. created_at stored by chat_storage) with a
     400 Bad Request.
+
+    If the model is rate-limited, retries on the RATE_LIMIT_FALLBACK_MODELS
+    still available (Groq's free limits are per model), and only re-raises
+    the RateLimitError if every one of them is limited too.
     """
-    clean = [{"role": m["role"], "content": m["content"]} for m in messages]
-    response = _get_client().chat.completions.create(
-        model=model_name,
-        messages=clean,
-    )
+    clean = [{"role": m["role"], "content": m["content"]} for m in _trim_history(messages)]
+    try:
+        response = _get_client().chat.completions.create(model=model_name, messages=clean)
+    except RateLimitError as first_error:
+        for fallback_model in _fallback_models(model_name):
+            try:
+                response = _get_client().chat.completions.create(
+                    model=fallback_model, messages=clean
+                )
+                break
+            except RateLimitError:
+                continue
+        else:
+            raise first_error
     return _use_dollar_math(response.choices[0].message.content)
+
+
+def describe_error(error: Exception, text: dict) -> str:
+    """The message to show a user when a chat call fails: a "too many
+    people, wait a minute" note for Groq rate limits (many testers share
+    one free key), the generic connection message otherwise."""
+    if isinstance(error, RateLimitError):
+        return text["rate_limit_error"]
+    return text["ollama_disconnected"]
 
 
 def ask_tutor(
@@ -94,7 +148,8 @@ def ask_tutor(
     material as extra context, and return the tutor's reply.
 
     `conversation_history` is updated in place with the plain student
-    message and the tutor's reply, so the saved history stays readable.
+    message and the tutor's reply, so the saved history stays readable --
+    but only if the call succeeds; on an error it's left untouched.
 
     Pass `use_rag=False` for a message that doesn't say what it is about.
     The "I'm stuck, give me a hint" button sends the same topic-free
@@ -109,16 +164,17 @@ def ask_tutor(
     relevant_chunks = rag.retrieve_relevant_chunks(student_message) if use_rag else []
     context_prompt = prompts.build_context_prompt(relevant_chunks)
 
-    conversation_history.append({"role": "user", "content": student_message})
+    model_content = (
+        context_prompt + "\n\nStudent's message: " + student_message
+        if context_prompt
+        else student_message
+    )
+    messages_for_model = conversation_history + [{"role": "user", "content": model_content}]
 
-    messages_for_model = conversation_history.copy()
-    if context_prompt:
-        messages_for_model[-1] = {
-            "role": "user",
-            "content": context_prompt + "\n\nStudent's message: " + student_message,
-        }
-
+    # History is only updated once the call succeeds, so a failed call
+    # (e.g. a rate limit) doesn't leave an unanswered message behind.
     tutor_reply = _call_groq_chat(messages_for_model, model_name)
+    conversation_history.append({"role": "user", "content": student_message})
     conversation_history.append({"role": "assistant", "content": tutor_reply})
 
     return tutor_reply
@@ -134,8 +190,9 @@ def ask_assistant(
     uploaded exam material to search (see ask_logos_with_material).
     `conversation_history` is updated in place, same as ask_tutor.
     """
-    conversation_history.append({"role": "user", "content": message})
-    reply = _call_groq_chat(conversation_history, model_name)
+    user_turn = {"role": "user", "content": message}
+    reply = _call_groq_chat(conversation_history + [user_turn], model_name)
+    conversation_history.append(user_turn)
     conversation_history.append({"role": "assistant", "content": reply})
     return reply
 
@@ -159,16 +216,15 @@ def ask_logos_with_material(
     )
     context_prompt = prompts.build_material_context_prompt(relevant_chunks)
 
-    conversation_history.append({"role": "user", "content": teacher_message})
-
-    messages_for_model = conversation_history.copy()
-    if context_prompt:
-        messages_for_model[-1] = {
-            "role": "user",
-            "content": context_prompt + "\n\nTeacher's message: " + teacher_message,
-        }
+    model_content = (
+        context_prompt + "\n\nTeacher's message: " + teacher_message
+        if context_prompt
+        else teacher_message
+    )
+    messages_for_model = conversation_history + [{"role": "user", "content": model_content}]
 
     reply = _call_groq_chat(messages_for_model, model_name)
+    conversation_history.append({"role": "user", "content": teacher_message})
     conversation_history.append({"role": "assistant", "content": reply})
 
     return reply

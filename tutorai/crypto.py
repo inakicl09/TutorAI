@@ -6,20 +6,25 @@ This is separate from the PBKDF2 hash in users.py, which is still what
 actually verifies logins -- that hash is never reversed. This module
 only feeds the admin-facing "view password" feature.
 
-The encryption key lives in a local file (config.SECRET_KEY_PATH),
-generated on first use. Treat it like a master password: anyone who
-gets it can decrypt every stored password, so it must never be
-committed to git (see .gitignore) or shared.
+The encryption key comes from config.SECRET_KEY if set (the hosted test
+site, whose disk is wiped on restart), otherwise from a local file
+(config.SECRET_KEY_PATH), generated on first use. Treat it like a
+master password: anyone who gets it can decrypt every stored password,
+so it must never be committed to git (see .gitignore) or shared.
 """
 
 import os
+from typing import Optional
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from tutorai import config
 
 
 def _load_or_create_key() -> bytes:
+    if config.SECRET_KEY:
+        return config.SECRET_KEY.encode("utf-8")
+
     if os.path.exists(config.SECRET_KEY_PATH):
         with open(config.SECRET_KEY_PATH, "rb") as key_file:
             return key_file.read()
@@ -36,6 +41,12 @@ def encrypt_password(password: str) -> str:
     return fernet.encrypt(password.encode("utf-8")).decode("utf-8")
 
 
-def decrypt_password(encrypted_password: str) -> str:
+def decrypt_password(encrypted_password: str) -> Optional[str]:
+    """Returns None if the value was encrypted with a different key (e.g.
+    SECRET_KEY changed on the hosted site), instead of crashing the admin
+    screen -- the admin can still reset that password."""
     fernet = Fernet(_load_or_create_key())
-    return fernet.decrypt(encrypted_password.encode("utf-8")).decode("utf-8")
+    try:
+        return fernet.decrypt(encrypted_password.encode("utf-8")).decode("utf-8")
+    except InvalidToken:
+        return None

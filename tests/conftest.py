@@ -13,4 +13,10 @@ def temp_database(tmp_path, monkeypatch):
     db_path = tmp_path / "test_tutorai.db"
     monkeypatch.setattr(config, "DB_PATH", str(db_path))
     monkeypatch.setattr(config, "SECRET_KEY_PATH", str(tmp_path / "test_secret.key"))
+    # Keep tests independent of whatever secrets the shell happens to have.
+    monkeypatch.setattr(config, "SECRET_KEY", "")
+    monkeypatch.setattr(config, "SUPABASE_URL", "")
+    monkeypatch.setattr(config, "SUPABASE_SERVICE_KEY", "")
+    monkeypatch.setattr(config, "SUPABASE_BUCKET", "")
+    monkeypatch.setattr(config, "PUBLIC_TEST_MODE", False)
     db.init_db()

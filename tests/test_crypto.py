@@ -17,3 +17,23 @@ def test_key_is_generated_once_and_reused():
     # same (reused) key.
     assert crypto.decrypt_password(first) == "hunter2"
     assert crypto.decrypt_password(second) == "hunter2"
+
+
+def test_decrypt_with_a_different_key_returns_none(monkeypatch, tmp_path):
+    from tutorai import config
+
+    encrypted = crypto.encrypt_password("secret")
+    monkeypatch.setattr(config, "SECRET_KEY_PATH", str(tmp_path / "other.key"))
+
+    assert crypto.decrypt_password(encrypted) is None
+
+
+def test_secret_key_setting_overrides_the_key_file(monkeypatch):
+    from cryptography.fernet import Fernet
+    from tutorai import config
+
+    monkeypatch.setattr(config, "SECRET_KEY", Fernet.generate_key().decode())
+    encrypted = crypto.encrypt_password("secret")
+    monkeypatch.setattr(config, "SECRET_KEY_PATH", "/nonexistent/should-not-be-used.key")
+
+    assert crypto.decrypt_password(encrypted) == "secret"

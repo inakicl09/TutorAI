@@ -33,6 +33,7 @@ from tutorai import (
     goals,
     homerooms,
     notes,
+    persistence,
     prompts,
     questions,
     rag,
@@ -43,6 +44,19 @@ from tutorai import (
     users,
 )
 
+# On the public test site the database file is backed up to Supabase
+# Storage (see persistence.py). It must be restored BEFORE anything opens
+# the database, so this runs first -- once per server process. A no-op
+# returning "disabled" when the Supabase secrets aren't set.
+@st.cache_resource(show_spinner=False)
+def start_database_backup() -> str:
+    status = persistence.restore_on_startup()
+    persistence.start_background_sync()
+    return status
+
+
+start_database_backup()
+
 db.init_db()
 classes.sync_with_teaching_assignments()
 homerooms.backfill_homerooms()
@@ -50,11 +64,17 @@ homerooms.backfill_homerooms()
 st.set_page_config(page_title="TutorAI", page_icon="📚")
 
 
-# The hosted copy starts every boot with an empty database, so fill it with
-# the demo accounts and chats. cache_resource runs this once per server
-# process instead of on every click. A no-op when accounts already exist.
+# The full demo starts every boot with an empty database, so fill it with
+# the demo accounts and chats. The public test site instead only gets its
+# shared all-subjects teacher (and the owner's admin), never fake users.
+# cache_resource runs this once per server process instead of on every
+# click. A no-op when accounts already exist.
 @st.cache_resource(show_spinner="Preparando datos de demostración (solo la primera vez)...")
 def prepare_demo_data() -> bool:
+    if config.PUBLIC_TEST_MODE:
+        seed_test_data.ensure_public_test_accounts()
+        persistence.flush_now()
+        return False
     return seed_test_data.seed_demo_if_empty()
 
 
@@ -112,12 +132,64 @@ with st.sidebar:
     )
     text = translations.TEXT[language]
 
+def render_feedback_link() -> None:
+    """Button to the external feedback questionnaire, if one is configured."""
+    if config.FEEDBACK_FORM_URL:
+        st.link_button(text["feedback_button"], config.FEEDBACK_FORM_URL)
+
+
+def render_public_test_signup(username_input: str, password_input: str) -> None:
+    """Public test site signup: students only, who pick their grade and
+    2-3 of its subjects, and are linked to the shared all-subjects
+    teacher for exactly those (users.create_student_with_subjects)."""
+    signup_grade = st.selectbox(text["grade_label"], options=subjects.GRADES)
+    chosen_subjects = st.multiselect(
+        text["signup_subjects_label"],
+        options=subjects.GRADE_SUBJECTS[signup_grade],
+        max_selections=users.MAX_SIGNUP_SUBJECTS,
+        # Keyed by grade, so switching grade starts an empty selection
+        # instead of keeping subjects the new grade doesn't offer.
+        key=f"signup_subjects_{signup_grade}",
+    )
+
+    if st.button(text["signup_button"]):
+        username_input = username_input.strip()
+        if not username_input or not password_input:
+            st.error(text["signup_missing_fields_error"])
+        elif users.username_exists(username_input):
+            st.error(text["signup_username_taken_error"])
+        elif not (
+            users.MIN_SIGNUP_SUBJECTS <= len(chosen_subjects) <= users.MAX_SIGNUP_SUBJECTS
+        ):
+            st.error(text["signup_subjects_count_error"])
+        else:
+            users.create_student_with_subjects(
+                username_input,
+                password_input,
+                signup_grade,
+                chosen_subjects,
+                config.PUBLIC_TEST_TEACHER_USERNAME,
+            )
+            # Save the new account to the backup straight away rather
+            # than waiting for the next background sync.
+            persistence.flush_now()
+            log_in_as(username_input)
+            st.rerun()
+
+
 if st.session_state.username is None:
     st.title(text["app_title"])
 
+    if config.PUBLIC_TEST_MODE:
+        st.info(text["public_test_intro"])
+        # Signup first, so it's what a new tester lands on.
+        auth_options = [text["signup_tab"], text["login_tab"]]
+    else:
+        auth_options = [text["login_tab"], text["signup_tab"]]
+
     auth_mode = st.radio(
         text["app_title"],
-        [text["login_tab"], text["signup_tab"]],
+        auth_options,
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -126,11 +198,13 @@ if st.session_state.username is None:
 
     if auth_mode == text["login_tab"]:
         if st.button(text["login_button"]):
-            if users.verify_login(username_input, password_input):
-                log_in_as(username_input)
+            if users.verify_login(username_input.strip(), password_input):
+                log_in_as(username_input.strip())
                 st.rerun()
             else:
                 st.error(text["login_failed_error"])
+    elif config.PUBLIC_TEST_MODE:
+        render_public_test_signup(username_input, password_input)
     else:
         role_choice = st.radio(
             text["role_label"], [text["role_student"], text["role_teacher"]]
@@ -153,20 +227,26 @@ if st.session_state.username is None:
                 log_in_as(username_input)
                 st.rerun()
 
-    # --- TEMPORARY: remove this block once the project is finished ---
-    # Lets you log in as any existing user without a password, purely
-    # for testing different roles quickly.
-    st.divider()
-    st.warning(text["dev_login_warning"])
-    all_usernames = [u["username"] for u in users.list_all_users()]
-    if all_usernames:
-        dev_login_username = st.selectbox(
-            text["dev_login_label"], options=all_usernames, key="dev_login_username"
-        )
-        if st.button(text["dev_login_button"], key="dev_login_button"):
-            log_in_as(dev_login_username)
-            st.rerun()
-    # --- END TEMPORARY ---
+    if config.PUBLIC_TEST_MODE:
+        st.divider()
+        st.caption(text["feedback_caption"])
+        render_feedback_link()
+    else:
+        # --- TEMPORARY: remove this block once the project is finished ---
+        # Lets you log in as any existing user without a password, purely
+        # for testing different roles quickly. Never shown on the public
+        # test site (config.PUBLIC_TEST_MODE), only on the full demo.
+        st.divider()
+        st.warning(text["dev_login_warning"])
+        all_usernames = [u["username"] for u in users.list_all_users()]
+        if all_usernames:
+            dev_login_username = st.selectbox(
+                text["dev_login_label"], options=all_usernames, key="dev_login_username"
+            )
+            if st.button(text["dev_login_button"], key="dev_login_button"):
+                log_in_as(dev_login_username)
+                st.rerun()
+        # --- END TEMPORARY ---
 
     st.stop()
 
@@ -216,6 +296,21 @@ else:
             ("flashcards", "screen_flashcards"),
         ],
     }
+
+    # Hidden on the public test site: there's a single shared teacher and
+    # subjects are picked at signup, so linking is moot; and student PDFs
+    # all go into one shared chromaDB collection, so one tester's upload
+    # would leak into everyone else's chats.
+    HIDDEN_IN_PUBLIC_TEST = {("student", "link_teacher"), ("student", "material")}
+    if config.PUBLIC_TEST_MODE:
+        SCREENS_BY_ROLE = {
+            screen_role: [
+                screen
+                for screen in screens
+                if (screen_role, screen[0]) not in HIDDEN_IN_PUBLIC_TEST
+            ]
+            for screen_role, screens in SCREENS_BY_ROLE.items()
+        }
 
     with st.sidebar:
         user_col, logout_col = st.columns([3, 1])
@@ -294,6 +389,7 @@ else:
                 st.caption(f"⏱ {text['stat_session_time']}: {session_str}")
 
         st.divider()
+        render_feedback_link()
         with st.expander(text["report_bug_header"]):
             bug_desc = st.text_area(
                 text["report_bug_label"], key="bug_report_input", label_visibility="collapsed"
@@ -474,6 +570,13 @@ else:
                 st.metric(text["stat_total_classes"], len(classes.list_classes()))
             with stat_columns[3]:
                 st.metric(text["stat_total_homerooms"], len(homerooms.list_homerooms()))
+
+            if persistence.is_configured():
+                backup_error = persistence.get_last_error()
+                if backup_error:
+                    st.warning(text["backup_warning"].format(error=backup_error))
+                else:
+                    st.caption(text["backup_status_ok"])
 
         elif screen == "add_user":
             st.header(text["add_user_header"])
@@ -853,8 +956,8 @@ else:
                             artemis_reply = chat.ask_assistant(
                                 artemis_chat["history"], admin_message, artemis_selected_model
                             )
-                    except Exception:
-                        st.error(text["ollama_disconnected"])
+                    except Exception as error:
+                        st.error(chat.describe_error(error, text))
                         st.stop()
 
                     with st.chat_message("assistant"):
@@ -1198,8 +1301,8 @@ else:
                                 logos_reply = ask_logos(
                                     active_test_chat["history"], teacher_message, logos_selected_model
                                 )
-                        except Exception:
-                            st.error(text["ollama_disconnected"])
+                        except Exception as error:
+                            st.error(chat.describe_error(error, text))
                             st.stop()
 
                         with st.chat_message("assistant"):
@@ -1900,8 +2003,8 @@ else:
                                 selected_model,
                                 use_rag=not is_hint_request,
                             )
-                    except Exception:
-                        st.error(text["ollama_disconnected"])
+                    except Exception as error:
+                        st.error(chat.describe_error(error, text))
                         st.stop()
 
                     with st.chat_message("assistant"):

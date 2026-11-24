@@ -216,3 +216,8 @@ data/tutorai.db
 # TutorAI: password encryption key -- anyone with this file can decrypt
 # every stored password (see crypto.py). Never commit it.
 data/secret.key
+
+# TutorAI: persistence.py's "local copy is trusted" marker and temp copies
+data/tutorai.db.backup-ok
+data/*.restore
+data/*.upload

@@ -12,6 +12,7 @@ chromadb
 pypdf
 cryptography
 openai
+requests
 sentence-transformers
 numpy<2
 transformers>=4.40,<5
