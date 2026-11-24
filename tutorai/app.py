@@ -198,6 +198,18 @@ def render_public_test_signup(username_input: str, password_input: str) -> None:
         key=f"signup_subjects_{signup_grade}",
     )
 
+    # Privacy information + explicit consent (GDPR art. 6.1.a and 13; under
+    # 14s need a guardian's consent in Spain, LOPDGDD art. 7). Both boxes
+    # must be ticked, and the accepted notice version is stored.
+    with st.expander(text["privacy_notice_header"]):
+        st.markdown(
+            text["privacy_notice_body"].format(
+                contact=config.RESEARCH_CONTACT or text["privacy_contact_fallback"]
+            )
+        )
+    consent_research = st.checkbox(text["consent_research_checkbox"])
+    consent_age = st.checkbox(text["consent_age_checkbox"])
+
     if st.button(text["signup_button"]):
         username_input = username_input.strip()
         if not username_input or not password_input:
@@ -208,6 +220,8 @@ def render_public_test_signup(username_input: str, password_input: str) -> None:
             users.MIN_SIGNUP_SUBJECTS <= len(chosen_subjects) <= users.MAX_SIGNUP_SUBJECTS
         ):
             st.error(text["signup_subjects_count_error"])
+        elif not (consent_research and consent_age):
+            st.error(text["consent_required_error"])
         else:
             users.create_student_with_subjects(
                 username_input,
@@ -215,6 +229,7 @@ def render_public_test_signup(username_input: str, password_input: str) -> None:
                 signup_grade,
                 chosen_subjects,
                 config.PUBLIC_TEST_TEACHER_USERNAME,
+                consent_version=config.PRIVACY_NOTICE_VERSION,
             )
             # Save the new account to the backup straight away rather
             # than waiting for the next background sync.
@@ -240,8 +255,17 @@ if st.session_state.username is None:
         horizontal=True,
         label_visibility="collapsed",
     )
-    username_input = st.text_input(text["username_label"])
-    password_input = st.text_input(text["password_label"], type="password")
+    username_input = st.text_input(
+        text["username_label"],
+        help=text["signup_username_hint"] if config.PUBLIC_TEST_MODE else None,
+    )
+    password_input = st.text_input(
+        text["password_label"],
+        type="password",
+        help=text["signup_password_hint"] if config.PUBLIC_TEST_MODE else None,
+    )
+    if config.PUBLIC_TEST_MODE and auth_mode == text["signup_tab"]:
+        st.caption(f"{text['signup_username_hint']} {text['signup_password_hint']}")
 
     if auth_mode == text["login_tab"]:
         if st.button(text["login_button"]):
@@ -699,6 +723,8 @@ else:
                         teacher_password = users.get_plaintext_password(teacher_username)
                         if teacher_password is not None:
                             st.write(f"{text['password_label_admin_view']}: `{teacher_password}`")
+                        elif config.PUBLIC_TEST_MODE:
+                            st.caption(text["password_hidden_public_test"])
                         else:
                             st.caption(text["password_not_available_message"])
 
@@ -788,6 +814,8 @@ else:
                         student_password = users.get_plaintext_password(student_username)
                         if student_password is not None:
                             st.write(f"{text['password_label_admin_view']}: `{student_password}`")
+                        elif config.PUBLIC_TEST_MODE:
+                            st.caption(text["password_hidden_public_test"])
                         else:
                             st.caption(text["password_not_available_message"])
 
@@ -1718,6 +1746,26 @@ else:
                     with st.expander(f"📢 {ann['subject']} ({ann['grade']}) — {ann['created_at'][:10]}"):
                         st.write(ann["content"])
 
+            # Lets a tester withdraw consent by erasing everything (GDPR
+            # art. 7.3 / 17). Two-step, like the app's other deletes.
+            if config.PUBLIC_TEST_MODE:
+                st.divider()
+                with st.expander(text["delete_account_header"]):
+                    st.caption(text["delete_account_body"])
+                    if st.button(text["delete_account_button"], key="delete_own_account"):
+                        st.session_state.confirm_delete_own_account = True
+                    if st.session_state.get("confirm_delete_own_account"):
+                        if st.button(
+                            text["delete_account_confirm_button"],
+                            key="delete_own_account_confirm",
+                            type="primary",
+                        ):
+                            users.delete_user(st.session_state.username)
+                            persistence.flush_now()
+                            st.session_state.confirm_delete_own_account = False
+                            log_out()
+                            st.rerun()
+
         elif screen == "link_teacher":
             st.header(text["link_teacher_header"])
             link_method = st.radio(
@@ -2038,6 +2086,9 @@ else:
                 ):
                     st.session_state["prefill_exercise_text"] = text["hint_request_message"]
                     st.rerun()
+
+                if config.PUBLIC_TEST_MODE:
+                    st.caption(text["ai_disclaimer"])
 
                 # Pre-filled exercise text (from Exercises screen)
                 prefill_text = st.session_state.pop("prefill_exercise_text", None)

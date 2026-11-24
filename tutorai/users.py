@@ -27,9 +27,10 @@ file.
 import hashlib
 import secrets
 import string
+from datetime import datetime, timezone
 from typing import Optional
 
-from tutorai import classes, crypto, db, homerooms, subjects
+from tutorai import classes, config, crypto, db, homerooms, subjects
 
 PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6
@@ -45,6 +46,30 @@ def _hash_password(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), salt.encode("utf-8"), PBKDF2_ITERATIONS
     ).hex()
+
+
+def _encrypted_copy(password: str) -> Optional[str]:
+    """The reversible copy behind the admin's "view password" feature --
+    never kept on the public test site, where real testers (who may reuse
+    passwords elsewhere) sign up. There only the one-way hash is stored."""
+    if config.PUBLIC_TEST_MODE:
+        return None
+    return crypto.encrypt_password(password)
+
+
+def forget_all_encrypted_passwords() -> int:
+    """Erase every stored reversible password copy (the public test site
+    calls this on startup, in case any was saved before that rule).
+    Returns how many were erased."""
+    connection = db.get_connection()
+    try:
+        cursor = connection.execute(
+            "UPDATE users SET encrypted_password = NULL WHERE encrypted_password IS NOT NULL"
+        )
+        connection.commit()
+        return cursor.rowcount
+    finally:
+        connection.close()
 
 
 def _generate_join_code(connection) -> str:
@@ -139,7 +164,7 @@ def create_student(username: str, password: str, grade: str) -> None:
                 username,
                 salt,
                 _hash_password(password, salt),
-                crypto.encrypt_password(password),
+                _encrypted_copy(password),
                 grade,
                 homeroom_id,
             ),
@@ -155,16 +180,22 @@ def create_student_with_subjects(
     grade: str,
     chosen_subjects: list[str],
     teacher_username: str,
+    consent_version: Optional[str] = None,
 ) -> None:
     """Sign up a student and link them straight away to `teacher_username`
     for each chosen subject of their own grade. Used by the public test
     site, where one shared teacher teaches every subject.
 
     Raises ValueError -- before creating anything, so a bad request never
-    leaves a half-made account -- if the grade is unknown, the number of
-    distinct subjects isn't MIN..MAX_SIGNUP_SUBJECTS, a subject isn't
-    offered at that grade, or the username is taken.
+    leaves a half-made account -- if consent wasn't given (no
+    `consent_version`, i.e. the version of the privacy notice the student
+    accepted), the grade is unknown, the number of distinct subjects isn't
+    MIN..MAX_SIGNUP_SUBJECTS, a subject isn't offered at that grade, or
+    the username is taken. The consent and its timestamp are stored on
+    the account, so it can be shown later that it was given.
     """
+    if not consent_version:
+        raise ValueError("Consent is required")
     if grade not in subjects.GRADE_SUBJECTS:
         raise ValueError("Unknown grade")
     distinct_subjects = list(dict.fromkeys(chosen_subjects))
@@ -178,6 +209,15 @@ def create_student_with_subjects(
         raise ValueError("Username already exists")
 
     create_student(username, password, grade)
+    connection = db.get_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET consent_at = ?, consent_version = ? WHERE username = ?",
+            (datetime.now(timezone.utc).isoformat(), consent_version, username),
+        )
+        connection.commit()
+    finally:
+        connection.close()
     for subject in distinct_subjects:
         link_student_to_teacher(username, teacher_username, grade, subject)
 
@@ -204,7 +244,7 @@ def create_teacher(username: str, password: str) -> str:
                 username,
                 salt,
                 _hash_password(password, salt),
-                crypto.encrypt_password(password),
+                _encrypted_copy(password),
                 join_code,
             ),
         )
@@ -231,7 +271,7 @@ def create_admin(username: str, password: str) -> None:
         connection.execute(
             "INSERT INTO users (username, role, salt, password_hash, encrypted_password) "
             "VALUES (?, 'admin', ?, ?, ?)",
-            (username, salt, _hash_password(password, salt), crypto.encrypt_password(password)),
+            (username, salt, _hash_password(password, salt), _encrypted_copy(password)),
         )
         connection.commit()
     finally:
@@ -422,7 +462,7 @@ def set_password(username: str, new_password: str) -> None:
             (
                 salt,
                 _hash_password(new_password, salt),
-                crypto.encrypt_password(new_password),
+                _encrypted_copy(new_password),
                 username,
             ),
         )
@@ -434,7 +474,10 @@ def set_password(username: str, new_password: str) -> None:
 def get_plaintext_password(username: str) -> Optional[str]:
     """Decrypt and return a user's actual password, for the admin
     dashboard. Returns None if the account predates this feature and
-    hasn't had its password reset since (nothing to decrypt)."""
+    hasn't had its password reset since (nothing to decrypt), and always
+    on the public test site."""
+    if config.PUBLIC_TEST_MODE:
+        return None
     connection = db.get_connection()
     try:
         row = connection.execute(
@@ -509,6 +552,15 @@ def delete_user(username: str) -> None:
         connection.execute(
             "DELETE FROM test_submissions WHERE student_username = ?", (username,)
         )
+        connection.execute(
+            "DELETE FROM submission_answers WHERE student_username = ?", (username,)
+        )
+        connection.execute("DELETE FROM notes WHERE student_username = ?", (username,))
+        connection.execute("DELETE FROM study_goals WHERE student_username = ?", (username,))
+        connection.execute("DELETE FROM bug_reports WHERE username = ?", (username,))
+        connection.execute("DELETE FROM question_bank WHERE teacher_username = ?", (username,))
+        connection.execute("DELETE FROM announcements WHERE teacher_username = ?", (username,))
+        connection.execute("DELETE FROM exercises WHERE teacher_username = ?", (username,))
         connection.execute("DELETE FROM flashcards WHERE student_username = ?", (username,))
         test_ids = [
             row["id"]
@@ -519,6 +571,7 @@ def delete_user(username: str) -> None:
         for test_id in test_ids:
             connection.execute("DELETE FROM test_questions WHERE test_id = ?", (test_id,))
             connection.execute("DELETE FROM test_submissions WHERE test_id = ?", (test_id,))
+            connection.execute("DELETE FROM submission_answers WHERE test_id = ?", (test_id,))
             connection.execute("DELETE FROM flashcards WHERE test_id = ?", (test_id,))
         connection.execute("DELETE FROM tests WHERE teacher_username = ?", (username,))
 

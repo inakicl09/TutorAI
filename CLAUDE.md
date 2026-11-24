@@ -526,6 +526,46 @@ of them. The setup guide for the user is in `README.md`.
     the history after a successful call, so a failed one leaves no
     unanswered message behind.
 
+### Privacy / consent on the test site (added 2026-11-24, user in Madrid)
+The user asked for a consent box and "any other legal things". Real
+testers, possibly minors, use the site, so the following was added. None
+of it applies to the full demo.
+- **No viewable passwords**: `users._encrypted_copy` stores
+  `encrypted_password = NULL` in test mode. `get_plaintext_password`
+  always returns None there, and `ensure_public_test_accounts` calls
+  `users.forget_all_encrypted_passwords()` on every boot. The admin sees
+  `password_hidden_public_test` instead of a password. Login still uses
+  the PBKDF2 hash.
+- **Signup consent**:
+  - There's a privacy-notice expander (`privacy_notice_body`), written to
+    cover the GDPR art. 13 points: controller and contact, purpose, data
+    collected, recipients (Groq, Streamlit Cloud, Supabase), legal basis
+    art. 6.1.a, under-14 rule (LOPDGDD art. 7), retention, rights, and
+    the AEPD.
+  - Two required checkboxes: research-only data use, and "14+ or
+    guardian consent".
+  - `users.create_student_with_subjects(..., consent_version=...)` refuses
+    to sign up without consent, and stores `users.consent_at` /
+    `consent_version` (`config.PRIVACY_NOTICE_VERSION`; bump it when the
+    notice text changes).
+  - The contact shown comes from the optional `RESEARCH_CONTACT` secret,
+    with a fallback pointing to the feedback form. Don't fill it in with
+    the user's email yourself; they set it.
+- **Withdrawal / erasure**: a "Borrar mi cuenta y mis datos" two-step
+  button on the student *Main menu* (test mode) runs `users.delete_user`
+  plus `persistence.flush_now()`. `delete_user` now also clears
+  `submission_answers`, `notes`, `study_goals`, `bug_reports`,
+  `question_bank`, `announcements` and `exercises`, which it used to miss.
+  Backup snapshots rotate through 24 hour-of-day slots
+  (`snapshots/tutorai-hour-HH.db`), so deleted data leaves every backup
+  within 24 h, as the notice promises.
+- **AI transparency**: a caption above the chat input ("Estás hablando
+  con una inteligencia artificial…"), plus lines in the guide and notice.
+- **Usernames**: hints asking for a nickname and a new password.
+- **Still the user's job** (told to them): delete all data (Supabase
+  bucket + the Cloud app) when the project ends; check with their school
+  about minors; optionally set `RESEARCH_CONTACT`.
+
 ## Testing
 
 - `tests/` mirrors `tutorai/` module-by-module (`tests/test_users.py`

@@ -47,7 +47,15 @@ the full demo above only because its Secrets contain
 - There are no fake demo accounts. Students only see **Menú principal**
   and **Chat**, because the test is about the AI tutor. Everything else
   is hidden.
-- A collapsed "ℹ️ ¿Cómo funciona TutorAI?" guide sits in the sidebar.
+- A highlighted "¿Cómo funciona TutorAI?" guide sits above the signup
+  form.
+- Signup shows a privacy notice and needs two consent boxes ticked:
+  research-only use, and 14+ or a parent's consent. Testers can delete
+  their own account and data from the main menu. Passwords are never
+  viewable, not even by the admin.
+- Optional secret `RESEARCH_CONTACT = "tu-email@ejemplo.com"`: the
+  contact shown in the privacy notice. Without it, the notice points to
+  the feedback form.
 - A "📝 Danos tu opinión" button links to your Google Form.
 - Accounts and chats are **kept**: the database is backed up to Supabase
   Storage (free) and restored when the app restarts.

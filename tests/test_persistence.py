@@ -130,7 +130,7 @@ def test_flush_uploads_a_valid_sqlite_copy_once_per_change(configured, tmp_path)
     # First flush uploads the latest copy plus an hourly snapshot.
     uploaded_urls = [c.args[0] for c in mock_post.call_args_list]
     assert uploaded_urls[0].endswith("/storage/v1/object/tutorai-backups/tutorai.db")
-    assert "/snapshots/tutorai-" in uploaded_urls[1]
+    assert "/snapshots/tutorai-hour-" in uploaded_urls[1]
     assert mock_post.call_args_list[0].kwargs["headers"]["x-upsert"] == "true"
 
     uploaded_copy = tmp_path / "uploaded.db"

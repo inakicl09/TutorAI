@@ -304,9 +304,11 @@ def _make_all_subjects_teacher(username: str = "profe_todo") -> str:
 def test_create_student_with_subjects_links_each_chosen_subject(chosen):
     teacher = _make_all_subjects_teacher()
 
-    users.create_student_with_subjects("ana", "pw", "1º ESO", chosen, teacher)
+    users.create_student_with_subjects("ana", "pw", "1º ESO", chosen, teacher, consent_version="v1")
 
     student = users.get_user("ana")
+    assert student["consent_version"] == "v1"
+    assert student["consent_at"]
     assert student["grade"] == "1º ESO"
     assert sorted(link["subject"] for link in student["subject_links"]) == sorted(chosen)
     assert all(link["teacher"] == teacher for link in student["subject_links"])
@@ -326,7 +328,9 @@ def test_create_student_with_subjects_rejects_bad_choices_without_creating_anyth
     teacher = _make_all_subjects_teacher()
 
     with pytest.raises(ValueError):
-        users.create_student_with_subjects("ana", "pw", "1º ESO", chosen, teacher)
+        users.create_student_with_subjects(
+            "ana", "pw", "1º ESO", chosen, teacher, consent_version="v1"
+        )
 
     assert not users.username_exists("ana")
 
@@ -337,7 +341,73 @@ def test_create_student_with_subjects_rejects_taken_username():
 
     with pytest.raises(ValueError):
         users.create_student_with_subjects(
-            "ana", "pw", "1º ESO", ["Matemáticas", "Música"], teacher
+            "ana", "pw", "1º ESO", ["Matemáticas", "Música"], teacher, consent_version="v1"
         )
 
     assert users.verify_login("ana", "original")
+
+
+def test_create_student_with_subjects_requires_consent():
+    teacher = _make_all_subjects_teacher()
+
+    with pytest.raises(ValueError):
+        users.create_student_with_subjects(
+            "ana", "pw", "1º ESO", ["Matemáticas", "Música"], teacher
+        )
+
+    assert not users.username_exists("ana")
+
+
+def test_public_test_mode_never_stores_a_viewable_password(monkeypatch):
+    from tutorai import config
+
+    users.create_student("before", "old-pw", "1º ESO")
+    assert users.get_plaintext_password("before") == "old-pw"
+
+    monkeypatch.setattr(config, "PUBLIC_TEST_MODE", True)
+    users.create_student("ana", "secret", "1º ESO")
+    users.set_password("before", "new-pw")
+
+    assert users.get_plaintext_password("ana") is None
+    assert users.verify_login("ana", "secret")
+    assert users.verify_login("before", "new-pw")
+    monkeypatch.setattr(config, "PUBLIC_TEST_MODE", False)
+    assert users.get_user("ana")["encrypted_password"] is None
+    assert users.get_user("before")["encrypted_password"] is None
+
+
+def test_forget_all_encrypted_passwords_erases_every_copy():
+    users.create_student("ana", "pw", "1º ESO")
+    users.create_teacher("profe", "pw")
+
+    assert users.forget_all_encrypted_passwords() == 2
+
+    assert users.get_plaintext_password("ana") is None
+    assert users.verify_login("ana", "pw")
+
+
+def test_delete_user_erases_notes_goals_and_bug_reports():
+    from tutorai import db, notes
+
+    users.create_student("ana", "pw", "1º ESO")
+    notes.save_note("ana", "1º ESO", "Matemáticas", "una nota")
+    connection = db.get_connection()
+    try:
+        connection.execute(
+            "INSERT INTO bug_reports (username, role, description, created_at) "
+            "VALUES ('ana', 'student', 'algo falla', '2026-11-24')"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    users.delete_user("ana")
+
+    assert notes.list_notes_for_student("ana") == []
+    connection = db.get_connection()
+    try:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM bug_reports WHERE username = 'ana'"
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()

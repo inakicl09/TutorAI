@@ -51,11 +51,81 @@ falla, cuéntanoslo con **🐛 Reportar un error**, en esta misma barra.
 **Tus datos**
 Tu cuenta y tus chats se guardan, así que puedes volver otro día.
 Es una versión de prueba: el organizador puede leer los chats para
-mejorar la aplicación, así que no escribas datos personales.
+mejorar la aplicación, así que no escribas datos personales. Puedes
+borrar tu cuenta y tus datos cuando quieras desde el *Menú principal*.
 
 **Cuando termines**, rellena el cuestionario con el botón
 **📝 Danos tu opinión**. ¡Gracias!
 """,
+        "signup_username_hint": "Usa un apodo, no tu nombre real.",
+        "signup_password_hint": "Usa una contraseña nueva, que no uses en otras webs.",
+        "privacy_notice_header": "🔒 Información sobre privacidad (léela antes de crear la cuenta)",
+        "privacy_notice_body": """
+**¿Quién es responsable?** El alumno o alumna que realiza este proyecto
+de investigación escolar en Madrid. Contacto: {contact}.
+
+**¿Para qué se usan tus datos?** Solo para el proyecto de investigación
+escolar: comprobar cómo funciona un tutor de inteligencia artificial y
+mejorarlo. No se venden ni se usan para publicidad. Los resultados del
+proyecto solo se publicarán de forma anónima y agregada, sin que se te
+pueda identificar.
+
+**¿Qué datos se recogen?** Tu nombre de usuario, tu curso, las
+asignaturas que elijas, tus conversaciones con Socrates y los errores que
+reportes. Tu contraseña se guarda cifrada de forma irreversible: nadie
+puede verla, ni siquiera el organizador. No escribas datos personales
+(nombre real, dirección, teléfono, centro educativo…) en los chats.
+
+**¿Quién puede ver tus conversaciones?** El organizador del proyecto,
+para analizarlas. Para generar las respuestas, tus mensajes se envían a
+Groq (empresa de EE. UU.). La web está alojada en Streamlit Community
+Cloud (EE. UU.) y la copia de seguridad de la base de datos se guarda en
+Supabase.
+
+**Base legal:** tu consentimiento (art. 6.1.a del RGPD). Puedes
+retirarlo cuando quieras borrando tu cuenta desde el *Menú principal*.
+
+**Menores de 14 años:** necesitan el consentimiento de su madre, padre
+o tutor legal (art. 7 de la LOPDGDD).
+
+**¿Cuánto tiempo se guardan?** Solo mientras dure el proyecto. Al
+terminar se borrarán todos los datos. Si borras tu cuenta, desaparece al
+momento y de las copias de seguridad en un máximo de 24 horas.
+
+**Tus derechos:** puedes pedir acceder a tus datos, corregirlos o
+borrarlos escribiendo a {contact}, o borrarlos tú mismo desde el *Menú
+principal*. Si crees que no se han tratado bien, puedes reclamar ante la
+Agencia Española de Protección de Datos (www.aepd.es).
+
+**Inteligencia artificial:** Socrates es una IA y puede equivocarse. Es
+una herramienta de estudio y no sustituye a tu profesor.
+""",
+        "privacy_contact_fallback": "el organizador del proyecto, a través del cuestionario de opinión",
+        "consent_research_checkbox": (
+            "Acepto que mis datos (usuario, curso, asignaturas y conversaciones) "
+            "se recojan y se usen únicamente para este proyecto de investigación "
+            "escolar, como explica la información sobre privacidad."
+        ),
+        "consent_age_checkbox": (
+            "Tengo 14 años o más, o mi madre, padre o tutor legal ha dado su "
+            "consentimiento para que use esta aplicación."
+        ),
+        "consent_required_error": "Para crear la cuenta tienes que marcar las dos casillas.",
+        "password_hidden_public_test": (
+            "En el sitio de prueba las contraseñas solo se guardan de forma "
+            "irreversible. Puedes poner una nueva si hace falta."
+        ),
+        "delete_account_header": "🗑️ Borrar mi cuenta y mis datos",
+        "delete_account_body": (
+            "Se borrarán tu cuenta y todas tus conversaciones al momento, y de "
+            "las copias de seguridad en un máximo de 24 horas. No se puede deshacer."
+        ),
+        "delete_account_button": "Borrar mi cuenta",
+        "delete_account_confirm_button": "Sí, borrar definitivamente",
+        "ai_disclaimer": (
+            "Estás hablando con una inteligencia artificial: puede equivocarse. "
+            "Comprueba lo importante con tu profesor."
+        ),
         "signup_subjects_label": "Elige 2 o 3 asignaturas",
         "signup_subjects_count_error": "Elige entre 2 y 3 asignaturas de tu curso.",
         "feedback_button": "📝 Danos tu opinión",
@@ -410,11 +480,79 @@ breaks, tell us with **🐛 Report a bug**, in this same sidebar.
 **Your data**
 Your account and chats are saved, so you can come back another day.
 This is a test version: the organizer can read chats to improve the
-app, so don't write personal information.
+app, so don't write personal information. You can delete your account
+and data any time from the *Main menu*.
 
 **When you're done**, fill in the questionnaire with the
 **📝 Give us your feedback** button. Thank you!
 """,
+        "signup_username_hint": "Use a nickname, not your real name.",
+        "signup_password_hint": "Use a new password you don't use on other websites.",
+        "privacy_notice_header": "🔒 Privacy information (read it before signing up)",
+        "privacy_notice_body": """
+**Who is responsible?** The student carrying out this school research
+project in Madrid. Contact: {contact}.
+
+**What is your data used for?** Only for the school research project:
+testing how an AI tutor works and improving it. It is never sold or used
+for advertising. The project's results will only be published in an
+anonymous, aggregated form that can't identify you.
+
+**What data is collected?** Your username, grade, the subjects you
+choose, your conversations with Socrates and any bugs you report. Your
+password is stored with one-way encryption: nobody can see it, not even
+the organizer. Don't write personal information (real name, address,
+phone number, school…) in the chats.
+
+**Who can see your conversations?** The project organizer, to analyse
+them. To generate replies, your messages are sent to Groq (a US
+company). The website is hosted on Streamlit Community Cloud (US) and
+the database backup is stored on Supabase.
+
+**Legal basis:** your consent (GDPR art. 6.1.a). You can withdraw it any
+time by deleting your account from the *Main menu*.
+
+**Under 14s:** need consent from a parent or legal guardian (Spanish
+LOPDGDD art. 7).
+
+**How long is it kept?** Only while the project lasts; all data is
+deleted when it ends. If you delete your account it's gone immediately,
+and from backups within 24 hours.
+
+**Your rights:** you can ask to access, correct or delete your data by
+writing to {contact}, or delete it yourself from the *Main menu*. If you
+think it hasn't been handled properly, you can complain to the Spanish
+Data Protection Agency (www.aepd.es).
+
+**Artificial intelligence:** Socrates is an AI and can make mistakes.
+It's a study tool, not a replacement for your teacher.
+""",
+        "privacy_contact_fallback": "the project organizer, through the feedback questionnaire",
+        "consent_research_checkbox": (
+            "I agree that my data (username, grade, subjects and conversations) "
+            "is collected and used only for this school research project, as "
+            "explained in the privacy information."
+        ),
+        "consent_age_checkbox": (
+            "I am 14 or older, or my parent or legal guardian has agreed to me "
+            "using this app."
+        ),
+        "consent_required_error": "To create your account you need to tick both boxes.",
+        "password_hidden_public_test": (
+            "On the test site passwords are only stored with one-way "
+            "encryption. You can set a new one if needed."
+        ),
+        "delete_account_header": "🗑️ Delete my account and data",
+        "delete_account_body": (
+            "Your account and all your conversations will be deleted immediately, "
+            "and from backups within 24 hours. This can't be undone."
+        ),
+        "delete_account_button": "Delete my account",
+        "delete_account_confirm_button": "Yes, delete permanently",
+        "ai_disclaimer": (
+            "You're talking to an artificial intelligence: it can make mistakes. "
+            "Check anything important with your teacher."
+        ),
         "signup_subjects_label": "Choose 2 or 3 subjects",
         "signup_subjects_count_error": "Choose between 2 and 3 subjects from your grade.",
         "feedback_button": "📝 Give us your feedback",

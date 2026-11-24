@@ -8,7 +8,8 @@ is copied:
   and downloads the last backup if there's no trusted local copy.
 - A background thread uploads a consistent copy (sqlite3's backup API)
   whenever the file has changed, at most every SYNC_INTERVAL_SECONDS, plus
-  a dated snapshot once an hour as a safety net. flush_now() uploads
+  an hourly snapshot as a safety net (24 rotating slots, so nothing,
+  including deleted accounts, survives in backups for more than a day). flush_now() uploads
   immediately (used right after a signup) and also runs at exit.
 
 Safety rule: uploads are only ever enabled after the startup restore
@@ -253,8 +254,11 @@ def flush_now() -> bool:
         _last_success_time = time.time()
 
         if time.time() - _last_snapshot_time >= SNAPSHOT_INTERVAL_SECONDS:
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H")
-            if _upload(f"snapshots/tutorai-{stamp}.db", content):
+            # 24 rotating slots (one per hour of the day), each overwritten
+            # a day later -- so a deleted account is also gone from every
+            # backup within 24 hours, as the privacy notice promises.
+            hour_slot = datetime.now(timezone.utc).strftime("%H")
+            if _upload(f"snapshots/tutorai-hour-{hour_slot}.db", content):
                 _last_snapshot_time = time.time()
         return True
 

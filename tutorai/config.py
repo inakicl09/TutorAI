@@ -46,6 +46,12 @@ PUBLIC_TEST_ADMIN_USERNAME = "admin"
 # Private passwords for the site owner's own accounts on the test site.
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "")
+# How testers can contact the person running the research project, shown
+# in the privacy notice (e.g. an email). Optional.
+RESEARCH_CONTACT = os.environ.get("RESEARCH_CONTACT", "")
+# Bump when the privacy notice text changes: it's stored with each
+# tester's consent, to show which version they accepted.
+PRIVACY_NOTICE_VERSION = "2026-11-24"
 # Link to the external feedback questionnaire, shown as a button if set.
 FEEDBACK_FORM_URL = os.environ.get("FEEDBACK_FORM_URL", "")
 # In test mode only the last this-many chat messages (plus the system

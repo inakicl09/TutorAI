@@ -326,6 +326,14 @@ def init_db() -> None:
         if "encrypted_password" not in existing_user_columns:
             connection.execute("ALTER TABLE users ADD COLUMN encrypted_password TEXT")
 
+        # Migration: when (and to which version of the privacy notice) a
+        # public-test-site student gave consent at signup. NULL for every
+        # other account.
+        if "consent_at" not in existing_user_columns:
+            connection.execute("ALTER TABLE users ADD COLUMN consent_at TEXT")
+        if "consent_version" not in existing_user_columns:
+            connection.execute("ALTER TABLE users ADD COLUMN consent_version TEXT")
+
         connection.commit()
     finally:
         connection.close()
