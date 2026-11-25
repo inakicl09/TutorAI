@@ -2128,8 +2128,15 @@ else:
                 # an "analyze" chat's prompt has that class's activity
                 # summary baked in at creation time, and rebuilding it
                 # would throw that away.
+                # The student's goal for this subject goes into the prompt
+                # too, so saving or changing it reaches Socrates right away.
+                current_goal = goals.get_goal(
+                    st.session_state.username,
+                    active_chat["grade"],
+                    active_chat["subject"],
+                )
                 current_system_prompt = prompts.build_system_prompt(
-                    active_chat["grade"], active_chat["subject"], language
+                    active_chat["grade"], active_chat["subject"], language, goal=current_goal
                 )
                 if active_chat["history"][0]["content"] != current_system_prompt:
                     chat_storage.update_system_prompt(active_chat["id"], current_system_prompt)
@@ -2139,46 +2146,6 @@ else:
                 render_delete_chat_controls(
                     active_chat["id"], "chats", "active_chat_id", text
                 )
-
-                # Study goal
-                current_goal = goals.get_goal(
-                    st.session_state.username,
-                    active_chat["grade"],
-                    active_chat["subject"],
-                )
-                with st.expander(
-                    f"🎯 {text['current_goal_label']}: {current_goal or '—'}",
-                    expanded=False,
-                ):
-                    new_goal = st.text_input(
-                        text["study_goal_header"],
-                        value=current_goal or "",
-                        placeholder=text["study_goal_placeholder"],
-                        key=f"goal_input_{active_chat['id']}",
-                    )
-                    goal_col1, goal_col2 = st.columns(2)
-                    with goal_col1:
-                        if st.button(text["save_goal_button"], key=f"save_goal_{active_chat['id']}"):
-                            if new_goal.strip():
-                                goals.set_goal(
-                                    st.session_state.username,
-                                    active_chat["grade"],
-                                    active_chat["subject"],
-                                    new_goal.strip(),
-                                )
-                                st.success(text["goal_saved_message"])
-                                st.rerun()
-                    with goal_col2:
-                        if current_goal and st.button(
-                            text["clear_goal_button"], key=f"clear_goal_{active_chat['id']}"
-                        ):
-                            goals.delete_goal(
-                                st.session_state.username,
-                                active_chat["grade"],
-                                active_chat["subject"],
-                            )
-                            st.success(text["goal_cleared_message"])
-                            st.rerun()
 
                 # Summarise + export buttons
                 user_msgs_in_chat = [m for m in active_chat["history"] if m["role"] == "user"]
@@ -2259,16 +2226,58 @@ else:
                     st.session_state["prefill_exercise_text"] = text["hint_request_message"]
                     st.rerun()
 
-                if config.PUBLIC_TEST_MODE:
-                    st.caption(text["ai_disclaimer"])
-
                 # Pre-filled exercise text (from Exercises screen)
                 prefill_text = st.session_state.pop("prefill_exercise_text", None)
 
-                student_message = st.chat_input(
-                    text["chat_placeholder"],
-                    key="chat_input_main",
-                )
+                # The goal and the question box share one framed box, so they
+                # read as one thing ("this is what I'm working towards, and
+                # here's my question"). It used to be a collapsed expander at
+                # the top, with the input pinned to the bottom of the page.
+                # Inside a container, st.chat_input renders inline instead.
+                with st.container(border=True, key="ask_box"):
+                    goal_text_col, goal_edit_col = st.columns([5, 1], vertical_alignment="center")
+                    with goal_text_col:
+                        if current_goal:
+                            st.markdown(text["goal_box_set"].format(goal=current_goal))
+                        else:
+                            st.markdown(text["goal_box_empty"])
+                    with goal_edit_col:
+                        with st.popover(
+                            text["edit_goal_button"] if current_goal else text["add_goal_button"],
+                            use_container_width=True,
+                        ):
+                            new_goal = st.text_input(
+                                text["study_goal_header"],
+                                value=current_goal or "",
+                                placeholder=text["study_goal_placeholder"],
+                                key=f"goal_input_{active_chat['id']}",
+                            )
+                            if st.button(
+                                text["save_goal_button"], key=f"save_goal_{active_chat['id']}"
+                            ) and new_goal.strip():
+                                goals.set_goal(
+                                    st.session_state.username,
+                                    active_chat["grade"],
+                                    active_chat["subject"],
+                                    new_goal.strip(),
+                                )
+                                st.rerun()
+                            if current_goal and st.button(
+                                text["clear_goal_button"], key=f"clear_goal_{active_chat['id']}"
+                            ):
+                                goals.delete_goal(
+                                    st.session_state.username,
+                                    active_chat["grade"],
+                                    active_chat["subject"],
+                                )
+                                st.rerun()
+
+                    student_message = st.chat_input(
+                        text["chat_placeholder_with_goal"] if current_goal else text["chat_placeholder"],
+                        key="chat_input_main",
+                    )
+                    if config.PUBLIC_TEST_MODE:
+                        st.caption(text["ai_disclaimer"])
                 if prefill_text and not student_message:
                     student_message = prefill_text
 

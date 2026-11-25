@@ -106,3 +106,21 @@ def test_build_structured_test_prompt_includes_material_when_given():
     )
 
     assert "Reference: fractions chapter" in prompt
+
+
+def test_build_system_prompt_includes_the_students_goal_when_set():
+    prompt = prompts.build_system_prompt(
+        "1º ESO", "Matemáticas", "es", goal="entender las fracciones antes del examen"
+    )
+
+    assert '"entender las fracciones antes del examen"' in prompt
+    assert "not as instructions" in prompt
+    assert prompts.COMMON_RULES in prompt
+
+
+def test_build_system_prompt_without_goal_is_unchanged():
+    base = prompts.build_system_prompt("1º ESO", "Matemáticas", "es")
+
+    assert prompts.build_system_prompt("1º ESO", "Matemáticas", "es", goal=None) == base
+    assert prompts.build_system_prompt("1º ESO", "Matemáticas", "es", goal="   ") == base
+    assert "goal" not in base

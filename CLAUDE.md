@@ -240,7 +240,16 @@ import each other with absolute imports, e.g. `from tutorai import db`.
     Empieza aquí" line sits right above an amber, pulsing button
     (`HIGHLIGHT_BUTTON_CSS`). A beta tester found the old order, subject
     dropdown then "Crear chat", unintuitive, since AI chat apps make the
-    chat for you. Then switch chats in a numbered radio, model picker, the
+    chat for you. Then switch chats in a numbered radio, model picker.
+    The **goal + question box**: the student's study goal (`goals.py`,
+    per student+grade+subject) and `st.chat_input` share one bordered
+    container (`key="ask_box"`), so the input renders inline right under
+    "🎯 Tu objetivo: …" (edited through a "✏️" `st.popover`). Its
+    placeholder becomes "…para avanzar en tu objetivo…" once a goal is
+    set. The goal is also passed to `prompts.build_system_prompt(...,
+    goal=)` on every open, so Socrates steers toward it; before, it was a
+    collapsed expander the AI never saw. The user asked for the two to
+    feel connected. Then the
     conversation itself — each message saved immediately via
     `chat_storage`, plus a delete-with-confirm button for the open chat,
     the shared `render_delete_chat_controls` helper in `app.py`, and a

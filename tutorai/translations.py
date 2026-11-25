@@ -330,7 +330,12 @@ una herramienta de estudio y no sustituye a tu profesor.
         "upload_button": "Añadir material",
         "upload_spinner": "Procesando PDF...",
         "upload_success": "Se añadieron {num_chunks} fragmentos a la base de conocimiento.",
-        "chat_placeholder": "Escribe tu pregunta...",
+        "chat_placeholder": "Escribe aquí tu pregunta...",
+        "chat_placeholder_with_goal": "Escribe aquí tu pregunta para avanzar en tu objetivo...",
+        "goal_box_set": "🎯 **Tu objetivo:** {goal}",
+        "goal_box_empty": "🎯 **Tu objetivo (opcional):** escríbelo y Socrates te guiará hacia él.",
+        "edit_goal_button": "✏️ Cambiar",
+        "add_goal_button": "✏️ Añadir",
         "hint_button": "💡 Estoy atascado, dame una pista",
         "hint_request_message": (
             "Estoy atascado y no sé cómo seguir. Dime el dato concreto que me falta "
@@ -767,7 +772,12 @@ It's a study tool, not a replacement for your teacher.
         "upload_button": "Add material",
         "upload_spinner": "Processing PDF...",
         "upload_success": "Added {num_chunks} chunks to the knowledge base.",
-        "chat_placeholder": "Type your question...",
+        "chat_placeholder": "Type your question here...",
+        "chat_placeholder_with_goal": "Type your question here to work towards your goal...",
+        "goal_box_set": "🎯 **Your goal:** {goal}",
+        "goal_box_empty": "🎯 **Your goal (optional):** write it down and Socrates will guide you towards it.",
+        "edit_goal_button": "✏️ Change",
+        "add_goal_button": "✏️ Add",
         "hint_button": "💡 I'm stuck, give me a hint",
         "hint_request_message": (
             "I'm stuck and I don't know how to carry on. Tell me the specific piece "
