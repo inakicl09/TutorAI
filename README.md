@@ -47,8 +47,9 @@ the full demo above only because its Secrets contain
 - There are no fake demo accounts. Students only see **Menú principal**
   and **Chat**, because the test is about the AI tutor. Everything else
   is hidden.
-- A highlighted "¿Cómo funciona TutorAI?" guide sits above the signup
-  form.
+- A highlighted "¿Cómo funciona TutorAI?" guide is the first thing on the
+  login page and on the student's main menu. It glows until opened.
+- To chat, students press **➕ Nuevo chat** and then pick the subject.
 - Signup shows a privacy notice and needs two consent boxes ticked:
   research-only use, and 14+ or a parent's consent. Testers can delete
   their own account and data from the main menu. Passwords are never

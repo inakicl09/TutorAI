@@ -39,15 +39,22 @@ TEXT = {
             "chats se guardan, así que puedes volver cuando quieras."
         ),
         "how_it_works_header": "ℹ️ ¿Cómo funciona TutorAI?",
-        "how_it_works_cta": "👉 ¿Primera vez aquí? Mira cómo funciona TutorAI (1 minuto)",
+        "how_it_works_cta": "👉 ¿Primera vez aquí? Lee cómo funciona TutorAI antes de empezar (1 minuto)",
+        "new_chat_button": "➕ Nuevo chat",
+        "first_chat_prompt": (
+            "👇 **Empieza aquí:** pulsa **➕ Nuevo chat** para crear tu primer "
+            "chat con Socrates. Después elegirás la asignatura."
+        ),
+        "choose_subject_prompt": "**¿De qué asignatura quieres hablar?**",
+        "go_to_chat_button": "💬 Ir al chat con Socrates",
         "how_it_works_body": """
 **Socrates es un tutor socrático.** No te da la respuesta directamente:
 te ayuda a llegar a ella con preguntas, como haría un buen profesor.
 
 **Cómo empezar**
 1. **Crea tu cuenta**: elige tu curso y de 1 a 3 asignaturas.
-2. Ve a **Chat**, elige una asignatura y escribe tu duda o el ejercicio
-   en el que estás trabajando.
+2. Ve a **Chat**, pulsa **➕ Nuevo chat** y elige la asignatura. Luego
+   escribe tu duda o el ejercicio en el que estás trabajando.
 3. Responde a sus preguntas. Cuanto más expliques lo que piensas, mejor
    te podrá guiar.
 4. ¿Atascado? Pulsa **💡 Estoy atascado, dame una pista**. Te dará un
@@ -473,15 +480,22 @@ una herramienta de estudio y no sustituye a tu profesor.
             "chats are saved, so you can come back any time."
         ),
         "how_it_works_header": "ℹ️ How does TutorAI work?",
-        "how_it_works_cta": "👉 First time here? See how TutorAI works (1 minute)",
+        "how_it_works_cta": "👉 First time here? Read how TutorAI works before you start (1 minute)",
+        "new_chat_button": "➕ New chat",
+        "first_chat_prompt": (
+            "👇 **Start here:** press **➕ New chat** to create your first chat "
+            "with Socrates. You'll choose the subject next."
+        ),
+        "choose_subject_prompt": "**Which subject do you want to talk about?**",
+        "go_to_chat_button": "💬 Go to the chat with Socrates",
         "how_it_works_body": """
 **Socrates is a Socratic tutor.** It doesn't hand you the answer: it
 helps you get there yourself with questions, like a good teacher would.
 
 **Getting started**
 1. **Create your account**: pick your grade and 1 to 3 subjects.
-2. Go to **Chat**, pick a subject and type your question or the
-   exercise you're working on.
+2. Go to **Chat**, press **➕ New chat** and pick the subject. Then type
+   your question or the exercise you're working on.
 3. Answer its questions. The more you explain your thinking, the better
    it can guide you.
 4. Stuck? Press **💡 I'm stuck, give me a hint**. It will give you a

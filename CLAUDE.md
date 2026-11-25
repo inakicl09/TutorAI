@@ -234,8 +234,13 @@ import each other with absolute imports, e.g. `from tutorai import db`.
   long scrolling page. The persona name (`config.ASSISTANT_NAMES[role]`)
   is always the page title regardless of which screen is active.
   - **student** (Socrates): *Main menu* (welcome, grade, homeroom,
-    linked-classes/chats-started stats), *Chat* (create/switch chats for
-    grade+subject combos they're linked to, model picker, the
+    linked-classes/chats-started stats), *Chat* ("➕ Nuevo chat" first,
+    THEN pick the subject from one button per linked grade+subject;
+    created directly with a single subject. With no chat yet, a "👇
+    Empieza aquí" line sits right above an amber, pulsing button
+    (`HIGHLIGHT_BUTTON_CSS`). A beta tester found the old order, subject
+    dropdown then "Crear chat", unintuitive, since AI chat apps make the
+    chat for you. Then switch chats in a numbered radio, model picker, the
     conversation itself — each message saved immediately via
     `chat_storage`, plus a delete-with-confirm button for the open chat,
     the shared `render_delete_chat_controls` helper in `app.py`, and a
@@ -489,17 +494,24 @@ a live check showed old password copies surviving a push.
 - **How-it-works guide** (`how_it_works_*` keys in `translations.py`,
   test site only). It also tells testers the organizer can read their
   chats.
-  - **Before login**: shown in the main page, above the signup form, as
-    an expander labelled "👉 ¿Primera vez aquí?…" (`render_highlighted_how_it_works`).
-    It's highlighted with scoped CSS: an amber border and tint, plus a
-    3× pulse, turned off under `prefers-reduced-motion`. The CSS targets
+  - **Before login**: the very first thing on the page, above the intro
+    box and the signup form, as an expander labelled "👉 ¿Primera vez
+    aquí? Lee cómo funciona…" (`render_highlighted_how_it_works`).
+  - **After login**: the same highlighted expander at the top of the
+    student's *Main menu*, with a "💬 Ir al chat con Socrates" quick-nav
+    button. A plain copy also stays in the sidebar.
+  - The highlight is scoped CSS: an amber border (thicker on the left),
+    a tint, and bold, larger text. It **pulses until opened**
+    (`details:not([open])`: Streamlit sets the native `open` attribute,
+    checked in its 1.50 bundle), then goes still. The user wanted
+    attention drawn to it without making it mandatory. No motion under
+    `prefers-reduced-motion`. The CSS targets
     `.st-key-how_it_works_highlight [data-testid="stExpander"] details`,
     which was checked against Streamlit 1.50's bundle (`details`/`summary`
     elements). Headless-Chrome screenshots stay blank, so it can't be
     verified visually from here.
-  - It's in the main page, not the sidebar, because phones hide the
+  - It's in the main page, not only the sidebar, because phones hide the
     sidebar.
-  - **After login**: a plain collapsed expander in the sidebar.
 - **Feedback form**: `render_feedback_link()` shows a box on the login
   page and in every role's sidebar.
   - The box is the keyed container `feedback_highlight`, styled by
@@ -543,6 +555,18 @@ a live check showed old password copies surviving a push.
     non-system messages are sent.
   - `chat.describe_error` shows a "wait a minute" message on rate limits.
 - **Chat fixes** (apply to both sites):
+  - Sidebar quick-nav (`pending_screen_id`, e.g. "Ir al chat" and the
+    teacher's main-menu shortcuts) used to pass the target as the radio's
+    `index=`. A changing index gives the widget a new identity, so the
+    **next** click anywhere bounced back to Main menu. It now writes
+    `st.session_state["screen_nav"]` before the radio is drawn, with no
+    `index`. It also writes the current choice back on every run, and
+    remaps it via `current_screen_id` after a language change, because
+    translated labels likewise make Streamlit see a new widget.
+  - The chat-picker radio (`key="chat_picker"`) works the same way. Code
+    that selects a chat itself (creating one, opening an exercise) sets
+    `chat_picker_sync`. A first attempt keyed the radio by the active
+    chat, which swallowed the next click when switching back.
   - `ask_tutor`/`ask_assistant`/`ask_logos_with_material` only append to
     the history after a successful call, so a failed one (e.g. a rate
     limit) leaves no unanswered message behind.

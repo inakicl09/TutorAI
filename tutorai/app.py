@@ -168,13 +168,18 @@ HOW_IT_WORKS_HIGHLIGHT_CSS = """
 <style>
 .st-key-how_it_works_highlight [data-testid="stExpander"] details {
     border: 2px solid #f59e0b;
+    border-left-width: 6px;
     border-radius: 0.75rem;
-    background: rgba(245, 158, 11, 0.12);
-    animation: tutorai-pulse 1.8s ease-in-out 3;
+    background: rgba(245, 158, 11, 0.16);
+}
+/* Keeps glowing until the student opens it (Streamlit sets the native
+   "open" attribute), then goes still -- attention without forcing it. */
+.st-key-how_it_works_highlight [data-testid="stExpander"] details:not([open]) {
+    animation: tutorai-pulse 2.2s ease-in-out infinite;
 }
 .st-key-how_it_works_highlight [data-testid="stExpander"] summary p {
-    font-weight: 700;
-    font-size: 1.05rem;
+    font-weight: 800;
+    font-size: 1.15rem;
 }
 @keyframes tutorai-pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
@@ -182,16 +187,48 @@ HOW_IT_WORKS_HIGHLIGHT_CSS = """
 }
 @media (prefers-reduced-motion: reduce) {
     .st-key-how_it_works_highlight [data-testid="stExpander"] details {
-        animation: none;
+        animation: none !important;
     }
+}
+</style>
+"""
+
+# The "➕ Nuevo chat" button while a student has no chat yet: amber, big and
+# pulsing, right under the "👇 Empieza aquí" line that points at it.
+# Streamlit's buttons are plain <button>s (data-testid stBaseButton-*).
+HIGHLIGHT_BUTTON_CSS = """
+<style>
+.st-key-new_chat_highlight button {
+    background: #f59e0b !important;
+    border: 2px solid #d97706 !important;
+    color: #1f2937 !important;
+    font-size: 1.1rem;
+    padding: 0.6rem 1.4rem;
+    animation: tutorai-pulse 2.2s ease-in-out infinite;
+}
+.st-key-new_chat_highlight button * {
+    color: #1f2937 !important;
+    font-weight: 800;
+}
+.st-key-new_chat_highlight button:hover {
+    background: #fbbf24 !important;
+}
+@keyframes tutorai-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    50% { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .st-key-new_chat_highlight button { animation: none; }
 }
 </style>
 """
 
 
 def render_highlighted_how_it_works() -> None:
-    """The how-it-works guide on the login page, made to stand out so
-    testers read it before creating an account."""
+    """The how-it-works guide, made to stand out (it glows until opened) so
+    testers read it. Shown at the top of the login page and of the
+    student's Main menu on the test site -- never both in one run, so the
+    container key is unique."""
     st.markdown(HOW_IT_WORKS_HIGHLIGHT_CSS, unsafe_allow_html=True)
     with st.container(key="how_it_works_highlight"):
         with st.expander(text["how_it_works_cta"]):
@@ -307,8 +344,9 @@ if st.session_state.username is None:
     st.title(text["app_title"])
 
     if config.PUBLIC_TEST_MODE:
-        st.info(text["public_test_intro"])
+        # Guide first, above everything else, so it's the first thing seen.
         render_highlighted_how_it_works()
+        st.info(text["public_test_intro"])
         # Signup first, so it's what a new tester lands on.
         auth_options = [text["signup_tab"], text["login_tab"]]
     else:
@@ -513,23 +551,39 @@ else:
 
             screen = st.session_state.admin_screen
         else:
-            # pending_screen_id is set by quick-nav buttons BEFORE this widget is drawn,
-            # so we can safely pre-select the right radio option without touching the
-            # widget's key after instantiation (which Streamlit forbids).
+            # Quick-nav buttons (e.g. "Ir al chat") set pending_screen_id and
+            # rerun; it's applied by writing the radio's own session-state
+            # value BEFORE the widget is drawn (allowed; writing it after is
+            # not). It used to be passed as `index=` instead, but a changing
+            # index gives the radio a new identity, so the very next click
+            # anywhere reset it to the first screen -- quick-nav "worked"
+            # for exactly one rerun, then bounced back to Main menu.
+            # The choice is also written back explicitly on every run: when
+            # the language changes, the translated labels make Streamlit treat
+            # the radio as a new widget, which only keeps its value if it was
+            # set through session state.
             pending_sid = st.session_state.pop("pending_screen_id", None)
-            default_screen_idx = (
-                screen_ids.index(pending_sid)
-                if pending_sid and pending_sid in screen_ids
-                else 0
-            )
+            if pending_sid in screen_ids:
+                st.session_state["screen_nav"] = screen_labels[screen_ids.index(pending_sid)]
+            elif st.session_state.get("screen_nav") in screen_labels:
+                st.session_state["screen_nav"] = st.session_state["screen_nav"]
+            else:
+                # The UI language just changed, so the remembered label no
+                # longer exists: reselect the same screen in the new
+                # language (or the first screen if it's unknown).
+                previous_sid = st.session_state.get("current_screen_id")
+                if previous_sid in screen_ids:
+                    st.session_state["screen_nav"] = screen_labels[screen_ids.index(previous_sid)]
+                else:
+                    st.session_state.pop("screen_nav", None)
 
             chosen_screen_label = st.radio(
                 text["screen_nav_label"],
                 screen_labels,
-                index=default_screen_idx,
                 key="screen_nav",
             )
             screen = screen_ids[screen_labels.index(chosen_screen_label)]
+            st.session_state.current_screen_id = screen
 
             if role == "student":
                 elapsed_secs = int(time.time() - st.session_state.session_start_time)
@@ -1791,6 +1845,12 @@ else:
             st.session_state.chats_loaded = True
 
         if screen == "main_menu":
+            if config.PUBLIC_TEST_MODE:
+                render_highlighted_how_it_works()
+                # Straight to the chat: on the test site that's the point.
+                if st.button(text["go_to_chat_button"], key="go_to_chat", type="primary"):
+                    st.session_state.pending_screen_id = "chat"
+                    st.rerun()
             st.write(text["welcome_message"].format(username=st.session_state.username))
             st.write(f"{text['grade_label']}: {current_user['grade']}")
             st.write(f"{text['homeroom_label']}: {current_user['homeroom_name'] or '—'}")
@@ -1924,35 +1984,66 @@ else:
                 st.success(text["upload_success"].format(num_chunks=num_chunks_added))
 
         elif screen == "chat":
-            st.header(text["new_chat_header"])
             subject_links = current_user["subject_links"]
+            # Unique (grade, subject) pairs, in link order.
+            chat_subjects = list(
+                dict.fromkeys((link["grade"], link["subject"]) for link in subject_links)
+            )
+
+            def _create_chat(grade: str, subject: str) -> None:
+                new_chat = chat_storage.create_chat(
+                    st.session_state.username,
+                    grade,
+                    subject,
+                    prompts.build_system_prompt(grade, subject, language),
+                )
+                st.session_state.chats.append(new_chat)
+                st.session_state.active_chat_id = new_chat["id"]
+                st.session_state.chat_picker_sync = True
+                st.session_state.choosing_new_chat_subject = False
+
+            st.header(text["chats_header"])
             if not subject_links:
                 st.caption(text["no_links_message"])
             else:
-                link_labels = [f"{link['subject']} ({link['grade']})" for link in subject_links]
-                unique_labels = list(dict.fromkeys(link_labels))
-                chosen_link_label = st.selectbox(
-                    text["subject_label"], options=unique_labels, key="new_chat_link"
-                )
-                chosen_link = subject_links[link_labels.index(chosen_link_label)]
+                # "New chat" first, THEN the subject (the user's beta tester
+                # found picking a subject before creating a chat confusing;
+                # AI chat apps usually make the chat for you). With no chat
+                # yet, a pointer line sits right above a highlighted button.
+                has_chats = bool(st.session_state.chats)
+                if not has_chats:
+                    st.markdown(text["first_chat_prompt"])
+                with st.container(key="new_chat_highlight" if not has_chats else "new_chat_plain"):
+                    if not has_chats:
+                        st.markdown(HIGHLIGHT_BUTTON_CSS, unsafe_allow_html=True)
+                    if st.button(
+                        text["new_chat_button"],
+                        key="new_chat_button",
+                        type="primary" if not has_chats else "secondary",
+                    ):
+                        if len(chat_subjects) == 1:
+                            # Only one subject: nothing to choose.
+                            _create_chat(*chat_subjects[0])
+                        else:
+                            st.session_state.choosing_new_chat_subject = True
 
-                if st.button(text["create_chat_button"]):
-                    system_prompt = prompts.build_system_prompt(
-                        chosen_link["grade"], chosen_link["subject"], language
-                    )
-                    new_chat = chat_storage.create_chat(
-                        st.session_state.username,
-                        chosen_link["grade"],
-                        chosen_link["subject"],
-                        system_prompt,
-                    )
-                    st.session_state.chats.append(new_chat)
-                    st.session_state.active_chat_id = new_chat["id"]
+                if st.session_state.get("choosing_new_chat_subject"):
+                    st.markdown(text["choose_subject_prompt"])
+                    subject_columns = st.columns(min(len(chat_subjects), 3))
+                    for position, (grade, subject) in enumerate(chat_subjects):
+                        with subject_columns[position % len(subject_columns)]:
+                            if st.button(
+                                f"{subject} ({grade})",
+                                key=f"new_chat_subject_{position}",
+                                use_container_width=True,
+                            ):
+                                _create_chat(grade, subject)
+                                st.rerun()
+                    if st.button(text["cancel_button"], key="new_chat_cancel"):
+                        st.session_state.choosing_new_chat_subject = False
+                        st.rerun()
 
-            st.header(text["chats_header"])
-            if not st.session_state.chats:
-                st.caption(text["no_chats_message"])
-            else:
+            if st.session_state.chats:
                 # Numbered so two chats on the same subject don't share a
                 # label -- picking (and deleting) one has to be unambiguous.
                 chat_labels = [
@@ -1960,16 +2051,32 @@ else:
                     for position, c in enumerate(st.session_state.chats, start=1)
                 ]
                 chat_ids = [c["id"] for c in st.session_state.chats]
-                current_index = (
-                    chat_ids.index(st.session_state.active_chat_id)
+                active_label = (
+                    chat_labels[chat_ids.index(st.session_state.active_chat_id)]
                     if st.session_state.active_chat_id in chat_ids
-                    else 0
+                    else chat_labels[0]
                 )
+                # The radio keeps its own state (stable key). Code that picks
+                # a chat itself (creating one, opening an exercise) sets
+                # chat_picker_sync, and the radio is moved to that chat here,
+                # before it's drawn. A changing key/index instead would give
+                # the radio a new identity and swallow the user's next click.
+                # Also resynced when its remembered label no longer exists
+                # (a chat was deleted, so the numbering changed).
+                if (
+                    st.session_state.pop("chat_picker_sync", False)
+                    or st.session_state.get("chat_picker") not in chat_labels
+                ):
+                    st.session_state["chat_picker"] = active_label
+                else:
+                    # Written back explicitly so it survives the radio's
+                    # options changing (same reason as the screen menu).
+                    st.session_state["chat_picker"] = st.session_state["chat_picker"]
                 chosen_chat_label = st.radio(
                     text["chats_header"],
                     chat_labels,
-                    index=current_index,
                     label_visibility="collapsed",
+                    key="chat_picker",
                 )
                 st.session_state.active_chat_id = chat_ids[chat_labels.index(chosen_chat_label)]
 
@@ -2006,12 +2113,13 @@ else:
                     )
                     st.session_state.chats.append(existing)
                 st.session_state.active_chat_id = existing["id"]
+                st.session_state.chat_picker_sync = True
                 st.session_state.prefill_exercise_text = (
                     f"[{prefill_ex['title']}]\n\n{prefill_ex['content']}"
                 )
 
             if active_chat is None:
-                st.info(text["no_chats_message"])
+                pass  # the "first chat" pointer and button above say what to do
             else:
                 # A chat stores the system prompt it was created with, so
                 # refresh it here: otherwise edits to prompts.py (e.g. the
