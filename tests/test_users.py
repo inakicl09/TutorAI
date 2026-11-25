@@ -300,7 +300,9 @@ def _make_all_subjects_teacher(username: str = "profe_todo") -> str:
     return username
 
 
-@pytest.mark.parametrize("chosen", [["Matemáticas", "Música"], ["Matemáticas", "Música", "Tutoría"]])
+@pytest.mark.parametrize(
+    "chosen", [["Matemáticas"], ["Matemáticas", "Música"], ["Matemáticas", "Música", "Tutoría"]]
+)
 def test_create_student_with_subjects_links_each_chosen_subject(chosen):
     teacher = _make_all_subjects_teacher()
 
@@ -318,9 +320,9 @@ def test_create_student_with_subjects_links_each_chosen_subject(chosen):
 @pytest.mark.parametrize(
     "chosen",
     [
-        ["Matemáticas"],  # too few
+        [],  # too few
         ["Matemáticas", "Música", "Religión", "Tutoría"],  # too many
-        ["Matemáticas", "Matemáticas"],  # duplicates count once -> too few
+        ["Matemáticas", "Música", "Religión", "Tutoría", "Música"],  # duplicates count once -> still 4
         ["Matemáticas", "Filosofía"],  # Filosofía isn't a 1º ESO subject
     ],
 )
@@ -411,3 +413,13 @@ def test_delete_user_erases_notes_goals_and_bug_reports():
         ).fetchone()[0] == 0
     finally:
         connection.close()
+
+
+def test_create_student_with_subjects_counts_duplicates_once():
+    teacher = _make_all_subjects_teacher()
+
+    users.create_student_with_subjects(
+        "ana", "pw", "1º ESO", ["Matemáticas", "Matemáticas"], teacher, consent_version="v1"
+    )
+
+    assert [link["subject"] for link in users.get_user("ana")["subject_links"]] == ["Matemáticas"]

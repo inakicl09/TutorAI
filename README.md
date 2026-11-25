@@ -41,7 +41,7 @@ the full demo above only because its Secrets contain
 
 - No "log in as any user" box. The page opens on **Crear cuenta**, for
   students only.
-- When signing up, a student picks their grade and 2 or 3 of its subjects.
+- When signing up, a student picks their grade and 1 to 3 of its subjects.
   They are linked automatically to `profesor_tutorai`, a teacher who
   teaches every subject in every grade.
 - There are no fake demo accounts. Students only see **Menú principal**

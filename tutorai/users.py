@@ -38,7 +38,7 @@ JOIN_CODE_CHARACTERS = string.ascii_uppercase + string.digits
 
 # How many subjects a student picks when signing up on the public test
 # site (see create_student_with_subjects).
-MIN_SIGNUP_SUBJECTS = 2
+MIN_SIGNUP_SUBJECTS = 1
 MAX_SIGNUP_SUBJECTS = 3
 
 

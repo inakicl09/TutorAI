@@ -34,7 +34,7 @@ TEXT = {
         "dev_login_label": "Usuario (modo de prueba)",
         "public_test_intro": (
             "Bienvenido/a a la versión de prueba de TutorAI. Crea tu cuenta "
-            "de alumno: elige tu curso y entre 2 y 3 asignaturas, y empieza "
+            "de alumno: elige tu curso y de 1 a 3 asignaturas, y empieza "
             "a hablar con Socrates, tu tutor socrático. Tu cuenta y tus "
             "chats se guardan, así que puedes volver cuando quieras."
         ),
@@ -45,7 +45,7 @@ TEXT = {
 te ayuda a llegar a ella con preguntas, como haría un buen profesor.
 
 **Cómo empezar**
-1. **Crea tu cuenta**: elige tu curso y 2 o 3 asignaturas.
+1. **Crea tu cuenta**: elige tu curso y de 1 a 3 asignaturas.
 2. Ve a **Chat**, elige una asignatura y escribe tu duda o el ejercicio
    en el que estás trabajando.
 3. Responde a sus preguntas. Cuanto más expliques lo que piensas, mejor
@@ -136,8 +136,8 @@ una herramienta de estudio y no sustituye a tu profesor.
             "Estás hablando con una inteligencia artificial: puede equivocarse. "
             "Comprueba lo importante con tu profesor."
         ),
-        "signup_subjects_label": "Elige 2 o 3 asignaturas",
-        "signup_subjects_count_error": "Elige entre 2 y 3 asignaturas de tu curso.",
+        "signup_subjects_label": "Elige de 1 a 3 asignaturas",
+        "signup_subjects_count_error": "Elige al menos 1 asignatura de tu curso (máximo 3).",
         "feedback_button": "📝 Rellenar formulario",
         "feedback_caption": (
             "⭐ **Muy importante para el proyecto:** cuando hayas probado "
@@ -468,7 +468,7 @@ una herramienta de estudio y no sustituye a tu profesor.
         "dev_login_label": "User (test mode)",
         "public_test_intro": (
             "Welcome to the TutorAI test version. Create your student "
-            "account: pick your grade and 2 to 3 subjects, then start "
+            "account: pick your grade and 1 to 3 subjects, then start "
             "talking to Socrates, your Socratic tutor. Your account and "
             "chats are saved, so you can come back any time."
         ),
@@ -479,7 +479,7 @@ una herramienta de estudio y no sustituye a tu profesor.
 helps you get there yourself with questions, like a good teacher would.
 
 **Getting started**
-1. **Create your account**: pick your grade and 2 or 3 subjects.
+1. **Create your account**: pick your grade and 1 to 3 subjects.
 2. Go to **Chat**, pick a subject and type your question or the
    exercise you're working on.
 3. Answer its questions. The more you explain your thinking, the better
@@ -568,8 +568,8 @@ It's a study tool, not a replacement for your teacher.
             "You're talking to an artificial intelligence: it can make mistakes. "
             "Check anything important with your teacher."
         ),
-        "signup_subjects_label": "Choose 2 or 3 subjects",
-        "signup_subjects_count_error": "Choose between 2 and 3 subjects from your grade.",
+        "signup_subjects_label": "Choose 1 to 3 subjects",
+        "signup_subjects_count_error": "Choose at least 1 subject from your grade (3 at most).",
         "feedback_button": "📝 Fill in the form",
         "feedback_caption": (
             "⭐ **Very important for the project:** once you've tried "

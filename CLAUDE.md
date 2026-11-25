@@ -467,7 +467,8 @@ a live check showed old password copies surviving a push.
 - **Signup** (`app.py`'s `render_public_test_signup`):
   - "Crear cuenta" is the default radio option, and only students can sign
     up.
-  - The student picks a grade and 2–3 of its subjects. That's
+  - The student picks a grade and 1–3 of its subjects (the minimum was
+    2 until the user asked for single-subject signups). That's
     `users.create_student_with_subjects`, which validates everything before
     creating anything, then links each subject to the shared teacher.
 - **Shared teacher**: `seed_test_data.ensure_all_subjects_teacher()` keeps
