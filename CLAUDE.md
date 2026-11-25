@@ -478,9 +478,21 @@ a live check showed old password copies surviving a push.
     pushed) mark commit `97179b2`.
   - A local zip `~/Desktop/TutorAI-backup-2026-11-24.zip` holds the project
     without `.venv`, including the gitignored `data/` and `.env`.
-- **Signup** (`app.py`'s `render_public_test_signup`):
+- **Signup** (two steps; the user wanted an uncluttered first page):
   - "Crear cuenta" is the default radio option, and only students can sign
     up.
+  - Step 1 (`render_public_test_signup_step1`) asks only for a username
+    and password. "Continuar →" checks that both are filled in and the
+    name is free, then keeps them in `st.session_state.pending_signup`.
+    Nothing is saved yet.
+  - Step 2 (`render_public_test_signup_step2`) replaces the whole login
+    form: grade, subjects, privacy notice and both consent boxes. Only
+    "Crear cuenta" there creates the account, all at once, then deletes
+    `pending_signup` (so the password isn't kept). An abandoned signup
+    leaves nothing behind, and consent always comes before any data is
+    stored. "← Volver" returns to step 1 keeping the username (via
+    `signup_prefill_username` → the `auth_username` input key), not the
+    password.
   - The student picks a grade and 1–3 of its subjects (the minimum was
     2 until the user asked for single-subject signups). That's
     `users.create_student_with_subjects`, which validates everything before

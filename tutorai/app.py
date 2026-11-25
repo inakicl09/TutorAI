@@ -160,10 +160,10 @@ with st.sidebar:
             st.markdown(text["how_it_works_body"])
 
 
-# Amber border + tinted background + a short pulse (3 times, then still;
-# none at all for people who ask their OS for reduced motion), scoped to
-# the container keyed "how_it_works_highlight" so no other expander
-# changes. Semi-transparent colors so it reads in light and dark themes.
+# Amber border + tinted background + a pulse until the guide is opened (none
+# at all for people who ask their OS for reduced motion), scoped to the
+# container keyed "how_it_works_highlight" so no other expander changes.
+# Semi-transparent colors so it reads in light and dark themes.
 HOW_IT_WORKS_HIGHLIGHT_CSS = """
 <style>
 .st-key-how_it_works_highlight [data-testid="stExpander"] details {
@@ -285,10 +285,35 @@ def render_feedback_link() -> None:
         st.link_button(text["feedback_button"], config.FEEDBACK_FORM_URL, width="stretch")
 
 
-def render_public_test_signup(username_input: str, password_input: str) -> None:
-    """Public test site signup: students only, who pick their grade and
-    2-3 of its subjects, and are linked to the shared all-subjects
-    teacher for exactly those (users.create_student_with_subjects)."""
+def render_public_test_signup_step1(username_input: str, password_input: str) -> None:
+    """Public test site signup, step 1 of 2: just a username and password,
+    checked and kept in session state -- nothing is saved yet. Grade,
+    subjects and consent come on their own page (step 2), which keeps the
+    first page short (the user's ask: "unclutter the sign up page")."""
+    st.caption(text["signup_step1_caption"])
+    if st.button(text["signup_continue_button"], type="primary"):
+        username_input = username_input.strip()
+        if not username_input or not password_input:
+            st.error(text["signup_missing_fields_error"])
+        elif users.username_exists(username_input):
+            st.error(text["signup_username_taken_error"])
+        else:
+            st.session_state.pending_signup = {
+                "username": username_input,
+                "password": password_input,
+            }
+            st.rerun()
+
+
+def render_public_test_signup_step2() -> None:
+    """Step 2 of 2: grade, 1-3 of its subjects, the privacy notice and both
+    consent boxes. Only here is the account created, all at once
+    (users.create_student_with_subjects), so an abandoned signup leaves
+    nothing behind and consent always comes before any data is stored."""
+    pending = st.session_state.pending_signup
+    st.subheader(text["signup_step2_header"])
+    st.markdown(text["signup_step2_caption"].format(username=pending["username"]))
+
     signup_grade = st.selectbox(text["grade_label"], options=subjects.GRADES)
     chosen_subjects = st.multiselect(
         text["signup_subjects_label"],
@@ -312,94 +337,110 @@ def render_public_test_signup(username_input: str, password_input: str) -> None:
     consent_research = st.checkbox(text["consent_research_checkbox"])
     consent_age = st.checkbox(text["consent_age_checkbox"])
 
-    if st.button(text["signup_button"]):
-        username_input = username_input.strip()
-        if not username_input or not password_input:
-            st.error(text["signup_missing_fields_error"])
-        elif users.username_exists(username_input):
-            st.error(text["signup_username_taken_error"])
-        elif not (
+    create_col, back_col = st.columns([3, 1])
+    with back_col:
+        if st.button(text["signup_back_button"], use_container_width=True):
+            # Back to step 1 with the username kept (not the password).
+            st.session_state.signup_prefill_username = pending["username"]
+            del st.session_state.pending_signup
+            st.rerun()
+    with create_col:
+        create_clicked = st.button(text["signup_button"], type="primary")
+
+    if create_clicked:
+        if not (
             users.MIN_SIGNUP_SUBJECTS <= len(chosen_subjects) <= users.MAX_SIGNUP_SUBJECTS
         ):
             st.error(text["signup_subjects_count_error"])
         elif not (consent_research and consent_age):
             st.error(text["consent_required_error"])
+        elif users.username_exists(pending["username"]):
+            # Someone took the name between step 1 and now.
+            st.error(text["signup_username_taken_error"])
         else:
             users.create_student_with_subjects(
-                username_input,
-                password_input,
+                pending["username"],
+                pending["password"],
                 signup_grade,
                 chosen_subjects,
                 config.PUBLIC_TEST_TEACHER_USERNAME,
                 consent_version=config.PRIVACY_NOTICE_VERSION,
             )
+            del st.session_state.pending_signup  # don't keep the password around
             # Save the new account to the backup straight away rather
             # than waiting for the next background sync.
             persistence.flush_now()
-            log_in_as(username_input)
+            log_in_as(pending["username"])
             st.rerun()
 
 
 if st.session_state.username is None:
     st.title(text["app_title"])
 
-    if config.PUBLIC_TEST_MODE:
-        # Guide first, above everything else, so it's the first thing seen.
-        render_highlighted_how_it_works()
-        st.info(text["public_test_intro"])
-        # Signup first, so it's what a new tester lands on.
-        auth_options = [text["signup_tab"], text["login_tab"]]
+    if config.PUBLIC_TEST_MODE and st.session_state.get("pending_signup"):
+        render_public_test_signup_step2()
     else:
-        auth_options = [text["login_tab"], text["signup_tab"]]
+        if config.PUBLIC_TEST_MODE:
+            # Guide first, above everything else, so it's the first thing seen.
+            render_highlighted_how_it_works()
+            st.info(text["public_test_intro"])
+            # Signup first, so it's what a new tester lands on.
+            auth_options = [text["signup_tab"], text["login_tab"]]
+        else:
+            auth_options = [text["login_tab"], text["signup_tab"]]
 
-    auth_mode = st.radio(
-        text["app_title"],
-        auth_options,
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    username_input = st.text_input(
-        text["username_label"],
-        help=text["signup_username_hint"] if config.PUBLIC_TEST_MODE else None,
-    )
-    password_input = st.text_input(
-        text["password_label"],
-        type="password",
-        help=text["signup_password_hint"] if config.PUBLIC_TEST_MODE else None,
-    )
-    if config.PUBLIC_TEST_MODE and auth_mode == text["signup_tab"]:
-        st.caption(f"{text['signup_username_hint']} {text['signup_password_hint']}")
-
-    if auth_mode == text["login_tab"]:
-        if st.button(text["login_button"]):
-            if users.verify_login(username_input.strip(), password_input):
-                log_in_as(username_input.strip())
-                st.rerun()
-            else:
-                st.error(text["login_failed_error"])
-    elif config.PUBLIC_TEST_MODE:
-        render_public_test_signup(username_input, password_input)
-    else:
-        role_choice = st.radio(
-            text["role_label"], [text["role_student"], text["role_teacher"]]
+        auth_mode = st.radio(
+            text["app_title"],
+            auth_options,
+            horizontal=True,
+            label_visibility="collapsed",
         )
-        signup_grade = None
-        if role_choice == text["role_student"]:
-            signup_grade = st.selectbox(text["grade_label"], options=subjects.GRADES)
+        # "← Volver" from signup step 2 brings the username back with it.
+        if "signup_prefill_username" in st.session_state:
+            st.session_state["auth_username"] = st.session_state.pop("signup_prefill_username")
+        username_input = st.text_input(
+            text["username_label"],
+            help=text["signup_username_hint"] if config.PUBLIC_TEST_MODE else None,
+            key="auth_username",
+        )
+        password_input = st.text_input(
+            text["password_label"],
+            type="password",
+            help=text["signup_password_hint"] if config.PUBLIC_TEST_MODE else None,
+        )
+        if config.PUBLIC_TEST_MODE and auth_mode == text["signup_tab"]:
+            st.caption(f"{text['signup_username_hint']} {text['signup_password_hint']}")
 
-        if st.button(text["signup_button"]):
-            if not username_input or not password_input:
-                st.error(text["signup_missing_fields_error"])
-            elif users.username_exists(username_input):
-                st.error(text["signup_username_taken_error"])
-            elif role_choice == text["role_student"]:
-                users.create_student(username_input, password_input, signup_grade)
-                log_in_as(username_input)
-                st.rerun()
-            else:
-                users.create_teacher(username_input, password_input)
-                log_in_as(username_input)
-                st.rerun()
+        if auth_mode == text["login_tab"]:
+            if st.button(text["login_button"]):
+                if users.verify_login(username_input.strip(), password_input):
+                    log_in_as(username_input.strip())
+                    st.rerun()
+                else:
+                    st.error(text["login_failed_error"])
+        elif config.PUBLIC_TEST_MODE:
+            render_public_test_signup_step1(username_input, password_input)
+        else:
+            role_choice = st.radio(
+                text["role_label"], [text["role_student"], text["role_teacher"]]
+            )
+            signup_grade = None
+            if role_choice == text["role_student"]:
+                signup_grade = st.selectbox(text["grade_label"], options=subjects.GRADES)
+
+            if st.button(text["signup_button"]):
+                if not username_input or not password_input:
+                    st.error(text["signup_missing_fields_error"])
+                elif users.username_exists(username_input):
+                    st.error(text["signup_username_taken_error"])
+                elif role_choice == text["role_student"]:
+                    users.create_student(username_input, password_input, signup_grade)
+                    log_in_as(username_input)
+                    st.rerun()
+                else:
+                    users.create_teacher(username_input, password_input)
+                    log_in_as(username_input)
+                    st.rerun()
 
     if config.PUBLIC_TEST_MODE:
         st.divider()

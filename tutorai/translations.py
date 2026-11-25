@@ -34,7 +34,8 @@ TEXT = {
         "dev_login_label": "Usuario (modo de prueba)",
         "public_test_intro": (
             "Bienvenido/a a la versión de prueba de TutorAI. Crea tu cuenta "
-            "de alumno: elige tu curso y de 1 a 3 asignaturas, y empieza "
+            "de alumno (usuario y contraseña, y después tu curso y de 1 a 3 "
+            "asignaturas) y empieza "
             "a hablar con Socrates, tu tutor socrático. Tu cuenta y tus "
             "chats se guardan, así que puedes volver cuando quieras."
         ),
@@ -144,6 +145,14 @@ una herramienta de estudio y no sustituye a tu profesor.
             "Comprueba lo importante con tu profesor."
         ),
         "signup_subjects_label": "Elige de 1 a 3 asignaturas",
+        "signup_step1_caption": "Paso 1 de 2: elige tu usuario y contraseña.",
+        "signup_continue_button": "Continuar →",
+        "signup_step2_header": "Paso 2 de 2: tu curso y asignaturas",
+        "signup_step2_caption": (
+            "Hola, **{username}**. Elige tu curso y de 1 a 3 asignaturas: así "
+            "Socrates adapta sus explicaciones a tu nivel."
+        ),
+        "signup_back_button": "← Volver",
         "signup_subjects_count_error": "Elige al menos 1 asignatura de tu curso (máximo 3).",
         "feedback_button": "📝 Rellenar formulario",
         "feedback_caption": (
@@ -480,7 +489,8 @@ una herramienta de estudio y no sustituye a tu profesor.
         "dev_login_label": "User (test mode)",
         "public_test_intro": (
             "Welcome to the TutorAI test version. Create your student "
-            "account: pick your grade and 1 to 3 subjects, then start "
+            "account (username and password, then your grade and 1 to 3 "
+            "subjects), then start "
             "talking to Socrates, your Socratic tutor. Your account and "
             "chats are saved, so you can come back any time."
         ),
@@ -588,6 +598,14 @@ It's a study tool, not a replacement for your teacher.
             "Check anything important with your teacher."
         ),
         "signup_subjects_label": "Choose 1 to 3 subjects",
+        "signup_step1_caption": "Step 1 of 2: choose your username and password.",
+        "signup_continue_button": "Continue →",
+        "signup_step2_header": "Step 2 of 2: your grade and subjects",
+        "signup_step2_caption": (
+            "Hi, **{username}**. Choose your grade and 1 to 3 subjects, so "
+            "Socrates can match its explanations to your level."
+        ),
+        "signup_back_button": "← Back",
         "signup_subjects_count_error": "Choose at least 1 subject from your grade (3 at most).",
         "feedback_button": "📝 Fill in the form",
         "feedback_caption": (
