@@ -294,68 +294,59 @@ def test_delete_user_rejects_unknown_username():
 
 
 def _make_all_subjects_teacher(username: str = "profe_todo") -> str:
+    from tutorai import subjects
+
     users.create_teacher(username, "pw")
-    for subject in ["Matemáticas", "Música", "Religión", "Tutoría"]:
-        users.add_teaching_assignment(username, "1º ESO", subject)
+    for grade, grade_subjects in subjects.GRADE_SUBJECTS.items():
+        for subject in grade_subjects:
+            users.add_teaching_assignment(username, grade, subject)
     return username
 
 
-@pytest.mark.parametrize(
-    "chosen", [["Matemáticas"], ["Matemáticas", "Música"], ["Matemáticas", "Música", "Tutoría"]]
-)
-def test_create_student_with_subjects_links_each_chosen_subject(chosen):
+@pytest.mark.parametrize("grade", ["1º ESO", "2º Bachillerato"])
+def test_create_public_test_student_links_every_subject_of_the_grade(grade):
+    from tutorai import subjects
+
     teacher = _make_all_subjects_teacher()
 
-    users.create_student_with_subjects("ana", "pw", "1º ESO", chosen, teacher, consent_version="v1")
+    users.create_public_test_student("ana", "pw", grade, teacher, consent_version="v1")
 
     student = users.get_user("ana")
     assert student["consent_version"] == "v1"
     assert student["consent_at"]
-    assert student["grade"] == "1º ESO"
-    assert sorted(link["subject"] for link in student["subject_links"]) == sorted(chosen)
+    assert student["grade"] == grade
+    assert sorted(link["subject"] for link in student["subject_links"]) == sorted(
+        subjects.GRADE_SUBJECTS[grade]
+    )
+    assert all(link["grade"] == grade for link in student["subject_links"])
     assert all(link["teacher"] == teacher for link in student["subject_links"])
     assert users.verify_login("ana", "pw")
 
 
-@pytest.mark.parametrize(
-    "chosen",
-    [
-        [],  # too few
-        ["Matemáticas", "Música", "Religión", "Tutoría"],  # too many
-        ["Matemáticas", "Música", "Religión", "Tutoría", "Música"],  # duplicates count once -> still 4
-        ["Matemáticas", "Filosofía"],  # Filosofía isn't a 1º ESO subject
-    ],
-)
-def test_create_student_with_subjects_rejects_bad_choices_without_creating_anything(chosen):
+def test_create_public_test_student_rejects_unknown_grade_without_creating_anything():
     teacher = _make_all_subjects_teacher()
 
     with pytest.raises(ValueError):
-        users.create_student_with_subjects(
-            "ana", "pw", "1º ESO", chosen, teacher, consent_version="v1"
-        )
+        users.create_public_test_student("ana", "pw", "5º ESO", teacher, consent_version="v1")
 
     assert not users.username_exists("ana")
 
 
-def test_create_student_with_subjects_rejects_taken_username():
+def test_create_public_test_student_rejects_taken_username():
     teacher = _make_all_subjects_teacher()
     users.create_student("ana", "original", "2º ESO")
 
     with pytest.raises(ValueError):
-        users.create_student_with_subjects(
-            "ana", "pw", "1º ESO", ["Matemáticas", "Música"], teacher, consent_version="v1"
-        )
+        users.create_public_test_student("ana", "pw", "1º ESO", teacher, consent_version="v1")
 
     assert users.verify_login("ana", "original")
 
 
-def test_create_student_with_subjects_requires_consent():
+def test_create_public_test_student_requires_consent():
     teacher = _make_all_subjects_teacher()
 
     with pytest.raises(ValueError):
-        users.create_student_with_subjects(
-            "ana", "pw", "1º ESO", ["Matemáticas", "Música"], teacher
-        )
+        users.create_public_test_student("ana", "pw", "1º ESO", teacher)
 
     assert not users.username_exists("ana")
 
@@ -413,13 +404,3 @@ def test_delete_user_erases_notes_goals_and_bug_reports():
         ).fetchone()[0] == 0
     finally:
         connection.close()
-
-
-def test_create_student_with_subjects_counts_duplicates_once():
-    teacher = _make_all_subjects_teacher()
-
-    users.create_student_with_subjects(
-        "ana", "pw", "1º ESO", ["Matemáticas", "Matemáticas"], teacher, consent_version="v1"
-    )
-
-    assert [link["subject"] for link in users.get_user("ana")["subject_links"]] == ["Matemáticas"]

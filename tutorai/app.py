@@ -306,23 +306,15 @@ def render_public_test_signup_step1(username_input: str, password_input: str) ->
 
 
 def render_public_test_signup_step2() -> None:
-    """Step 2 of 2: grade, 1-3 of its subjects, the privacy notice and both
-    consent boxes. Only here is the account created, all at once
-    (users.create_student_with_subjects), so an abandoned signup leaves
+    """Step 2 of 2: grade, the privacy notice and both consent boxes (every
+    subject of the grade becomes available; no subject picking). Only here is the account created, all at once
+    (users.create_public_test_student), so an abandoned signup leaves
     nothing behind and consent always comes before any data is stored."""
     pending = st.session_state.pending_signup
     st.subheader(text["signup_step2_header"])
     st.markdown(text["signup_step2_caption"].format(username=pending["username"]))
 
     signup_grade = st.selectbox(text["grade_label"], options=subjects.GRADES)
-    chosen_subjects = st.multiselect(
-        text["signup_subjects_label"],
-        options=subjects.GRADE_SUBJECTS[signup_grade],
-        max_selections=users.MAX_SIGNUP_SUBJECTS,
-        # Keyed by grade, so switching grade starts an empty selection
-        # instead of keeping subjects the new grade doesn't offer.
-        key=f"signup_subjects_{signup_grade}",
-    )
 
     # Privacy information + explicit consent (GDPR art. 6.1.a and 13; under
     # 14s need a guardian's consent in Spain, LOPDGDD art. 7). Both boxes
@@ -348,21 +340,16 @@ def render_public_test_signup_step2() -> None:
         create_clicked = st.button(text["signup_button"], type="primary")
 
     if create_clicked:
-        if not (
-            users.MIN_SIGNUP_SUBJECTS <= len(chosen_subjects) <= users.MAX_SIGNUP_SUBJECTS
-        ):
-            st.error(text["signup_subjects_count_error"])
-        elif not (consent_research and consent_age):
+        if not (consent_research and consent_age):
             st.error(text["consent_required_error"])
         elif users.username_exists(pending["username"]):
             # Someone took the name between step 1 and now.
             st.error(text["signup_username_taken_error"])
         else:
-            users.create_student_with_subjects(
+            users.create_public_test_student(
                 pending["username"],
                 pending["password"],
                 signup_grade,
-                chosen_subjects,
                 config.PUBLIC_TEST_TEACHER_USERNAME,
                 consent_version=config.PRIVACY_NOTICE_VERSION,
             )
@@ -2026,12 +2013,30 @@ else:
 
         elif screen == "chat":
             subject_links = current_user["subject_links"]
-            # Unique (grade, subject) pairs, in link order.
-            chat_subjects = list(
-                dict.fromkeys((link["grade"], link["subject"]) for link in subject_links)
-            )
+            if config.PUBLIC_TEST_MODE:
+                # Every subject of the student's grade, whatever they were
+                # linked to (testers who signed up when they picked 1-3
+                # subjects included); see _create_chat for the link.
+                chat_subjects = [
+                    (current_user["grade"], subject)
+                    for subject in subjects.GRADE_SUBJECTS.get(current_user["grade"], [])
+                ]
+            else:
+                # Unique (grade, subject) pairs, in link order.
+                chat_subjects = list(
+                    dict.fromkeys((link["grade"], link["subject"]) for link in subject_links)
+                )
 
             def _create_chat(grade: str, subject: str) -> None:
+                if config.PUBLIC_TEST_MODE:
+                    # Make sure the shared teacher's Supervise view sees
+                    # this chat's student (a no-op if already linked).
+                    users.link_student_to_teacher(
+                        st.session_state.username,
+                        config.PUBLIC_TEST_TEACHER_USERNAME,
+                        grade,
+                        subject,
+                    )
                 new_chat = chat_storage.create_chat(
                     st.session_state.username,
                     grade,
@@ -2044,7 +2049,7 @@ else:
                 st.session_state.choosing_new_chat_subject = False
 
             st.header(text["chats_header"])
-            if not subject_links:
+            if not chat_subjects:
                 st.caption(text["no_links_message"])
             else:
                 # "New chat" first, THEN the subject (the user's beta tester
@@ -2074,7 +2079,8 @@ else:
                     for position, (grade, subject) in enumerate(chat_subjects):
                         with subject_columns[position % len(subject_columns)]:
                             if st.button(
-                                f"{subject} ({grade})",
+                                # All one grade on the test site: no need to repeat it.
+                                subject if config.PUBLIC_TEST_MODE else f"{subject} ({grade})",
                                 key=f"new_chat_subject_{position}",
                                 use_container_width=True,
                             ):

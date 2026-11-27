@@ -34,8 +34,7 @@ TEXT = {
         "dev_login_label": "Usuario (modo de prueba)",
         "public_test_intro": (
             "Bienvenido/a a la versión de prueba de TutorAI. Crea tu cuenta "
-            "de alumno (usuario y contraseña, y después tu curso y de 1 a 3 "
-            "asignaturas) y empieza "
+            "de alumno (usuario y contraseña, y después tu curso) y empieza "
             "a hablar con Socrates, tu tutor socrático. Tu cuenta y tus "
             "chats se guardan, así que puedes volver cuando quieras."
         ),
@@ -53,7 +52,7 @@ TEXT = {
 te ayuda a llegar a ella con preguntas, como haría un buen profesor.
 
 **Cómo empezar**
-1. **Crea tu cuenta**: elige tu curso y de 1 a 3 asignaturas.
+1. **Crea tu cuenta**: elige tu usuario, tu contraseña y tu curso.
 2. Ve a **Chat**, pulsa **➕ Nuevo chat** y elige la asignatura. Luego
    escribe tu duda o el ejercicio en el que estás trabajando.
 3. Responde a sus preguntas. Cuanto más expliques lo que piensas, mejor
@@ -144,16 +143,14 @@ una herramienta de estudio y no sustituye a tu profesor.
             "Estás hablando con una inteligencia artificial: puede equivocarse. "
             "Comprueba lo importante con tu profesor."
         ),
-        "signup_subjects_label": "Elige de 1 a 3 asignaturas",
         "signup_step1_caption": "Paso 1 de 2: elige tu usuario y contraseña.",
         "signup_continue_button": "Continuar →",
-        "signup_step2_header": "Paso 2 de 2: tu curso y asignaturas",
+        "signup_step2_header": "Paso 2 de 2: tu curso",
         "signup_step2_caption": (
-            "Hola, **{username}**. Elige tu curso y de 1 a 3 asignaturas: así "
-            "Socrates adapta sus explicaciones a tu nivel."
+            "Hola, **{username}**. Elige tu curso: tendrás todas sus asignaturas "
+            "disponibles y Socrates adaptará sus explicaciones a tu nivel."
         ),
         "signup_back_button": "← Volver",
-        "signup_subjects_count_error": "Elige al menos 1 asignatura de tu curso (máximo 3).",
         "feedback_button": "📝 Rellenar formulario",
         "feedback_caption": (
             "⭐ **Muy importante para el proyecto:** cuando hayas probado "
@@ -489,8 +486,7 @@ una herramienta de estudio y no sustituye a tu profesor.
         "dev_login_label": "User (test mode)",
         "public_test_intro": (
             "Welcome to the TutorAI test version. Create your student "
-            "account (username and password, then your grade and 1 to 3 "
-            "subjects), then start "
+            "account (username and password, then your grade), then start "
             "talking to Socrates, your Socratic tutor. Your account and "
             "chats are saved, so you can come back any time."
         ),
@@ -508,7 +504,7 @@ una herramienta de estudio y no sustituye a tu profesor.
 helps you get there yourself with questions, like a good teacher would.
 
 **Getting started**
-1. **Create your account**: pick your grade and 1 to 3 subjects.
+1. **Create your account**: choose your username, password and grade.
 2. Go to **Chat**, press **➕ New chat** and pick the subject. Then type
    your question or the exercise you're working on.
 3. Answer its questions. The more you explain your thinking, the better
@@ -597,16 +593,14 @@ It's a study tool, not a replacement for your teacher.
             "You're talking to an artificial intelligence: it can make mistakes. "
             "Check anything important with your teacher."
         ),
-        "signup_subjects_label": "Choose 1 to 3 subjects",
         "signup_step1_caption": "Step 1 of 2: choose your username and password.",
         "signup_continue_button": "Continue →",
-        "signup_step2_header": "Step 2 of 2: your grade and subjects",
+        "signup_step2_header": "Step 2 of 2: your grade",
         "signup_step2_caption": (
-            "Hi, **{username}**. Choose your grade and 1 to 3 subjects, so "
-            "Socrates can match its explanations to your level."
+            "Hi, **{username}**. Choose your grade: all of its subjects will be "
+            "available, and Socrates will match its explanations to your level."
         ),
         "signup_back_button": "← Back",
-        "signup_subjects_count_error": "Choose at least 1 subject from your grade (3 at most).",
         "feedback_button": "📝 Fill in the form",
         "feedback_caption": (
             "⭐ **Very important for the project:** once you've tried "

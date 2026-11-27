@@ -486,17 +486,22 @@ a live check showed old password copies surviving a push.
     name is free, then keeps them in `st.session_state.pending_signup`.
     Nothing is saved yet.
   - Step 2 (`render_public_test_signup_step2`) replaces the whole login
-    form: grade, subjects, privacy notice and both consent boxes. Only
+    form: grade only, privacy notice and both consent boxes. Only
     "Crear cuenta" there creates the account, all at once, then deletes
     `pending_signup` (so the password isn't kept). An abandoned signup
     leaves nothing behind, and consent always comes before any data is
     stored. "← Volver" returns to step 1 keeping the username (via
     `signup_prefill_username` → the `auth_username` input key), not the
     password.
-  - The student picks a grade and 1–3 of its subjects (the minimum was
-    2 until the user asked for single-subject signups). That's
-    `users.create_student_with_subjects`, which validates everything before
-    creating anything, then links each subject to the shared teacher.
+  - No subject picking: `users.create_public_test_student` links the
+    student to the shared teacher for **every** subject of their grade,
+    after validating consent, grade and name before creating anything.
+    The *Chat* screen's "➕ Nuevo chat" lists every subject of the
+    grade. This also covers testers who signed up under the old 1–3 pick;
+    their missing link is added when they open a chat in that subject, so
+    the teacher's Supervise view still sees them. History: 2–3 subjects at
+    first (the user's original ask), then 1–3, then dropped. The user
+    wanted any subject of the grade available when starting a chat.
 - **Shared teacher**: `seed_test_data.ensure_all_subjects_teacher()` keeps
   `profesor_tutorai` teaching every `(grade, subject)` in `subjects.py`
   (104 classes). `ensure_public_test_accounts()` also creates `admin` if

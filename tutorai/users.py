@@ -36,11 +36,6 @@ PBKDF2_ITERATIONS = 200_000
 JOIN_CODE_LENGTH = 6
 JOIN_CODE_CHARACTERS = string.ascii_uppercase + string.digits
 
-# How many subjects a student picks when signing up on the public test
-# site (see create_student_with_subjects).
-MIN_SIGNUP_SUBJECTS = 1
-MAX_SIGNUP_SUBJECTS = 3
-
 
 def _hash_password(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac(
@@ -174,37 +169,29 @@ def create_student(username: str, password: str, grade: str) -> None:
         connection.close()
 
 
-def create_student_with_subjects(
+def create_public_test_student(
     username: str,
     password: str,
     grade: str,
-    chosen_subjects: list[str],
     teacher_username: str,
     consent_version: Optional[str] = None,
 ) -> None:
-    """Sign up a student and link them straight away to `teacher_username`
-    for each chosen subject of their own grade. Used by the public test
-    site, where one shared teacher teaches every subject.
+    """Sign up a public-test-site student and link them straight away to
+    `teacher_username` (the shared all-subjects teacher) for EVERY subject
+    of their grade, so any of them can be picked when starting a chat. The
+    user dropped the earlier "pick 1-3 subjects at signup" step.
 
     Raises ValueError -- before creating anything, so a bad request never
     leaves a half-made account -- if consent wasn't given (no
     `consent_version`, i.e. the version of the privacy notice the student
-    accepted), the grade is unknown, the number of distinct subjects isn't
-    MIN..MAX_SIGNUP_SUBJECTS, a subject isn't offered at that grade, or
-    the username is taken. The consent and its timestamp are stored on
-    the account, so it can be shown later that it was given.
+    accepted), the grade is unknown, or the username is taken. The consent
+    and its timestamp are stored on the account, so it can be shown later
+    that it was given.
     """
     if not consent_version:
         raise ValueError("Consent is required")
     if grade not in subjects.GRADE_SUBJECTS:
         raise ValueError("Unknown grade")
-    distinct_subjects = list(dict.fromkeys(chosen_subjects))
-    if not MIN_SIGNUP_SUBJECTS <= len(distinct_subjects) <= MAX_SIGNUP_SUBJECTS:
-        raise ValueError(
-            f"Choose between {MIN_SIGNUP_SUBJECTS} and {MAX_SIGNUP_SUBJECTS} subjects"
-        )
-    if any(subject not in subjects.GRADE_SUBJECTS[grade] for subject in distinct_subjects):
-        raise ValueError("A chosen subject isn't offered at that grade")
     if username_exists(username):
         raise ValueError("Username already exists")
 
@@ -218,7 +205,7 @@ def create_student_with_subjects(
         connection.commit()
     finally:
         connection.close()
-    for subject in distinct_subjects:
+    for subject in subjects.GRADE_SUBJECTS[grade]:
         link_student_to_teacher(username, teacher_username, grade, subject)
 
 
