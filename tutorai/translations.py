@@ -52,17 +52,24 @@ TEXT = {
 te ayuda a llegar a ella con preguntas, como haría un buen profesor.
 
 **Cómo empezar**
-1. **Crea tu cuenta**: elige tu usuario, tu contraseña y tu curso.
-2. Ve a **Chat**, pulsa **➕ Nuevo chat** y elige la asignatura. Luego
-   escribe tu duda o el ejercicio en el que estás trabajando.
-3. Responde a sus preguntas. Cuanto más expliques lo que piensas, mejor
-   te podrá guiar.
-4. ¿Atascado? Pulsa **💡 Estoy atascado, dame una pista**. Te dará un
+1. **Crea tu cuenta** en dos pasos: primero tu usuario y contraseña,
+   después tu curso. Tendrás todas las asignaturas de tu curso.
+2. Ve a **Chat** (o pulsa **💬 Ir al chat con Socrates** en el *Menú
+   principal*), pulsa **➕ Nuevo chat** y elige la asignatura.
+3. **Opcional:** en el recuadro de abajo, pulsa **✏️ Añadir** y escribe
+   tu objetivo (por ejemplo, "entender las fracciones antes del
+   examen"). Socrates lo tendrá en cuenta y te guiará hacia él.
+4. Escribe tu duda o el ejercicio en **"Escribe aquí tu pregunta..."**
+   y responde a sus preguntas. Cuanto más expliques lo que piensas,
+   mejor te podrá guiar.
+5. ¿Atascado? Pulsa **💡 Estoy atascado, dame una pista**. Te dará un
    dato, una fórmula o un paso concreto, pero nunca la respuesta final:
    el último paso es tuyo.
 
-Puedes abrir varios chats, uno por cada duda o asignatura. Si algo
-falla, cuéntanoslo con **🐛 Reportar un error**, en esta misma barra.
+Puedes abrir varios chats, uno por cada duda o asignatura, y cambiar
+entre ellos en la lista **Tus chats**. Si algo falla, cuéntanoslo con
+**🐛 Reportar un error**, en la barra lateral (en el móvil se abre con
+el botón de arriba a la izquierda).
 
 **Tus datos**
 Tu cuenta y tus chats se guardan, así que puedes volver otro día.
@@ -504,17 +511,25 @@ una herramienta de estudio y no sustituye a tu profesor.
 helps you get there yourself with questions, like a good teacher would.
 
 **Getting started**
-1. **Create your account**: choose your username, password and grade.
-2. Go to **Chat**, press **➕ New chat** and pick the subject. Then type
-   your question or the exercise you're working on.
-3. Answer its questions. The more you explain your thinking, the better
-   it can guide you.
-4. Stuck? Press **💡 I'm stuck, give me a hint**. It will give you a
+1. **Create your account** in two steps: first your username and
+   password, then your grade. All the subjects of your grade will be
+   available.
+2. Go to **Chat** (or press **💬 Go to the chat with Socrates** on the
+   *Main menu*), press **➕ New chat** and pick the subject.
+3. **Optional:** in the box at the bottom, press **✏️ Add** and write
+   your goal (for example, "understand fractions before the exam").
+   Socrates will keep it in mind and guide you towards it.
+4. Type your question or the exercise in **"Type your question
+   here..."** and answer its questions. The more you explain your
+   thinking, the better it can guide you.
+5. Stuck? Press **💡 I'm stuck, give me a hint**. It will give you a
    fact, a formula or one concrete step, but never the final answer:
    the last step is yours.
 
-You can open several chats, one per question or subject. If something
-breaks, tell us with **🐛 Report a bug**, in this same sidebar.
+You can open several chats, one per question or subject, and switch
+between them in the **Your chats** list. If something breaks, tell us
+with **🐛 Report a bug**, in the sidebar (on a phone, open it with the
+button at the top left).
 
 **Your data**
 Your account and chats are saved, so you can come back another day.
@@ -522,8 +537,8 @@ This is a test version: the organizer can read chats to improve the
 app, so don't write personal information. You can delete your account
 and data any time from the *Main menu*.
 
-**When you're done, fill in the form** with the **📝 Fill in the
-form** button: it's essential for the project. Thank you!
+**When you're done, fill in the form** with the
+**📝 Fill in the form** button: it's essential for the project. Thank you!
 """,
         "signup_username_hint": "Use a nickname, not your real name.",
         "signup_password_hint": "Use a new password you don't use on other websites.",
